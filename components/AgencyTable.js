@@ -15,6 +15,7 @@ import {
 // (the sticky Agency name gets special handling below, and the trailing
 // actions column) aren't sortable.
 const SORT_FIELDS = {
+  activeListings: "active_listings",
   status: "status_sort_order",
   phone: "phone",
   suggested: "suggested_price_per_listing",
@@ -243,7 +244,14 @@ export default function AgencyTable() {
             <thead>
               <tr className="text-left text-xs text-neutral-400 border-b border-neutral-800">
                 <th
-                  className="sticky top-0 left-0 bg-neutral-950 z-30 min-w-[190px] px-2 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:text-white"
+                  className="sticky top-0 left-0 bg-neutral-950 z-30 w-16 min-w-[64px] max-w-[64px] px-2 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:text-white text-center"
+                  onClick={() => handleSort(SORT_FIELDS.activeListings)}
+                  title="Number of active listings. Click to sort."
+                >
+                  Active{sortIndicator(SORT_FIELDS.activeListings, sortField, sortDir)}
+                </th>
+                <th
+                  className="sticky top-0 left-16 bg-neutral-950 z-30 min-w-[190px] px-2 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:text-white"
                   onClick={() => handleSort("name")}
                   title="Click to sort alphabetically. Default order: overdue follow-ups first, then active conversations, then Not Contacted, then closed deals at the bottom."
                 >
@@ -289,7 +297,15 @@ export default function AgencyTable() {
                     key={r.id}
                     className="border-b border-neutral-900 hover:bg-neutral-900/40"
                   >
-                    <Td className="sticky left-0 bg-neutral-950 hover:bg-neutral-900/40 font-medium">
+                    <Td className="sticky left-0 bg-neutral-950 hover:bg-neutral-900/40 w-16 min-w-[64px] max-w-[64px] text-center">
+                      <EditableCell
+                        type="number"
+                        value={r.active_listings}
+                        onSave={(v) => patch(r.id, "active_listings", v === null ? 0 : Number(v))}
+                        className="text-center"
+                      />
+                    </Td>
+                    <Td className="sticky left-16 bg-neutral-950 hover:bg-neutral-900/40 font-medium">
                       <button
                         onClick={() => setInfoAgency(r)}
                         className="text-left text-white hover:text-neutral-300 hover:underline truncate block w-full px-1 py-0.5"
@@ -386,7 +402,7 @@ export default function AgencyTable() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={14} className="text-center text-neutral-600 text-sm py-10">
+                  <td colSpan={15} className="text-center text-neutral-600 text-sm py-10">
                     No agencies match.
                   </td>
                 </tr>
