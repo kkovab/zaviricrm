@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { getStoredName, setStoredName, colorForName } from "@/lib/presence";
 
@@ -15,7 +16,9 @@ export function usePresence() {
 }
 
 // How long a live cursor sticks around with no update before we assume that
-// person's tab went away/idle and stop drawing it.
+// person's tab went away/idle and stop drawing it. This is only a fallback
+// for an ungraceful disconnect (network loss, browser crash) - a normal tab
+// close/navigation is caught instantly by the presence "leave" event below.
 const CURSOR_TIMEOUT_MS = 4000;
 // Minimum time between broadcasting our own mouse position - keeps this
 // smooth-looking without sending on every single pixel of movement.
@@ -41,10 +44,12 @@ export default function PresenceProvider({ children }) {
   const [name, setName] = useState(null);
   const [nameDraft, setNameDraft] = useState("");
   const [others, setOthers] = useState({}); // cellId -> [{ name, color }]
+  const [peopleBySession, setPeopleBySession] = useState({}); // sessionId -> { name, color, cellId, afk }
   const [cursors, setCursors] = useState({}); // sessionId -> { name, color, xPct, yPct, updatedAt }
   const channelRef = useRef(null);
   const sessionIdRef = useRef(null);
   const activeCellRef = useRef(null);
+  const afkRef = useRef(false);
   const lastCursorSentRef = useRef(0);
 
   useEffect(() => {
@@ -70,16 +75,35 @@ export default function PresenceProvider({ children }) {
 
     function syncOthers() {
       const state = channel.presenceState();
-      const map = {};
+      const cellMap = {};
+      const peopleMap = {};
       Object.values(state)
         .flat()
         .forEach((entry) => {
           if (entry.sessionId === sessionIdRef.current) return; // that's us
+          peopleMap[entry.sessionId] = {
+            name: entry.name,
+            color: entry.color,
+            cellId: entry.cellId,
+            afk: !!entry.afk,
+          };
           if (!entry.cellId) return;
-          if (!map[entry.cellId]) map[entry.cellId] = [];
-          map[entry.cellId].push({ name: entry.name, color: entry.color });
+          if (!cellMap[entry.cellId]) cellMap[entry.cellId] = [];
+          cellMap[entry.cellId].push({ name: entry.name, color: entry.color });
         });
-      setOthers(map);
+      setOthers(cellMap);
+      setPeopleBySession(peopleMap);
+    }
+
+    function onPresenceLeave({ key }) {
+      // Someone closed their tab / navigated away - drop their live cursor
+      // right away instead of waiting for the stale-cursor prune timer.
+      setCursors((prev) => {
+        if (!(key in prev)) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
     }
 
     function onCursorBroadcast({ payload }) {
@@ -114,20 +138,37 @@ export default function PresenceProvider({ children }) {
       });
     }
 
+    function onVisibilityChange() {
+      afkRef.current = document.hidden;
+      const ch = channelRef.current;
+      if (!ch) return;
+      ch.track({
+        sessionId: sessionIdRef.current,
+        name,
+        color,
+        cellId: activeCellRef.current,
+        afk: afkRef.current,
+      });
+    }
+
     channel.on("presence", { event: "sync" }, syncOthers);
+    channel.on("presence", { event: "leave" }, onPresenceLeave);
     channel.on("broadcast", { event: "cursor" }, onCursorBroadcast);
     channel.subscribe(async (status) => {
       if (status === "SUBSCRIBED") {
+        afkRef.current = document.hidden;
         await channel.track({
           sessionId: sessionIdRef.current,
           name,
           color,
           cellId: activeCellRef.current,
+          afk: afkRef.current,
         });
       }
     });
 
     window.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     const pruneTimer = setInterval(() => {
       setCursors((prev) => {
         const now = Date.now();
@@ -144,6 +185,7 @@ export default function PresenceProvider({ children }) {
     channelRef.current = channel;
     return () => {
       window.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       clearInterval(pruneTimer);
       client.removeChannel(channel);
       channelRef.current = null;
@@ -159,6 +201,7 @@ export default function PresenceProvider({ children }) {
       name,
       color: colorForName(name),
       cellId,
+      afk: afkRef.current,
     });
   }
 
@@ -174,13 +217,17 @@ export default function PresenceProvider({ children }) {
     setName(trimmed);
   }
 
-  return (
-    <PresenceContext.Provider value={{ name, setActiveCell, othersOnCell }}>
-      {children}
-
-      {/* Other people's live mouse cursors, drawn on top of everything. */}
-      <div className="fixed inset-0 z-[9999] pointer-events-none overflow-hidden">
-        {Object.entries(cursors).map(([id, c]) => (
+  // Other people's live mouse cursors. Portaled directly onto <body> (rather
+  // than rendered inline in the component tree) so their `fixed` positioning
+  // is guaranteed to be relative to the real browser viewport - never to
+  // some scrolled/positioned ancestor further up the page - which is what
+  // made them appear to "scroll along" with the local page before. Also
+  // drawn on top of everything else.
+  const cursorLayer = (
+    <div className="fixed inset-0 z-[9999] pointer-events-none overflow-hidden">
+      {Object.entries(cursors).map(([id, c]) => {
+        const afk = !!peopleBySession[id]?.afk;
+        return (
           <div
             key={id}
             className="absolute transition-[left,top] duration-75 ease-linear"
@@ -192,10 +239,19 @@ export default function PresenceProvider({ children }) {
               style={{ backgroundColor: c.color }}
             >
               {c.name}
+              {afk ? " (AFK)" : ""}
             </span>
           </div>
-        ))}
-      </div>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <PresenceContext.Provider value={{ name, setActiveCell, othersOnCell }}>
+      {children}
+
+      {typeof document !== "undefined" && createPortal(cursorLayer, document.body)}
 
       {name === "" && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 px-4">
