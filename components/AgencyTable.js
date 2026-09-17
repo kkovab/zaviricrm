@@ -164,8 +164,8 @@ export default function AgencyTable() {
   );
 
   return (
-    <div className="min-h-screen bg-neutral-950">
-      <header className="border-b border-neutral-800 px-4 sm:px-6 py-4 flex flex-wrap items-center gap-3 justify-between sticky top-0 bg-neutral-950 z-10">
+    <div className="h-screen flex flex-col bg-neutral-950">
+      <header className="border-b border-neutral-800 px-4 sm:px-6 py-4 flex flex-wrap items-center gap-3 justify-between shrink-0 bg-neutral-950 z-10">
         <div className="flex items-center gap-3">
           <img src="/logo.webp" alt="Logo" className="h-8 w-8 rounded shrink-0" />
           <div>
@@ -238,7 +238,7 @@ export default function AgencyTable() {
         </div>
       </header>
 
-      <div className="thin-scroll overflow-x-auto">
+      <div className="thin-scroll flex-1 overflow-auto">
         {loading ? (
           <p className="text-neutral-500 text-sm p-6">Loading...</p>
         ) : (
@@ -246,7 +246,7 @@ export default function AgencyTable() {
             <thead>
               <tr className="text-left text-xs text-neutral-400 border-b border-neutral-800">
                 <th
-                  className="sticky left-0 bg-neutral-950 z-10 min-w-[190px] px-2 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:text-white"
+                  className="sticky top-0 left-0 bg-neutral-950 z-30 min-w-[190px] px-2 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:text-white"
                   onClick={() => handleSort("name")}
                   title="Click to sort alphabetically. Default order: overdue follow-ups first, then active conversations, then Not Contacted, then closed deals at the bottom."
                 >
@@ -453,7 +453,7 @@ function sortIndicator(field, sortField, sortDir) {
 function SortTh({ label, field, sortField, sortDir, handleSort, className = "", title }) {
   return (
     <th
-      className={`px-2 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:text-white ${className}`}
+      className={`sticky top-0 z-20 bg-neutral-950 px-2 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:text-white ${className}`}
       onClick={() => handleSort(field)}
       title={title || `Click to sort by ${label}`}
     >
@@ -464,7 +464,11 @@ function SortTh({ label, field, sortField, sortDir, handleSort, className = "", 
 }
 
 function Th({ children, className = "" }) {
-  return <th className={`px-2 py-2 font-medium whitespace-nowrap ${className}`}>{children}</th>;
+  return (
+    <th className={`sticky top-0 z-20 bg-neutral-950 px-2 py-2 font-medium whitespace-nowrap ${className}`}>
+      {children}
+    </th>
+  );
 }
 
 function Td({ children, className = "" }) {
