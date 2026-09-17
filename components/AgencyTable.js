@@ -288,14 +288,14 @@ export default function AgencyTable() {
             <thead>
               <tr className="text-left text-xs text-neutral-400 border-b border-neutral-800">
                 <th
-                  className="sticky top-0 left-0 isolate [transform:translateZ(0)] bg-neutral-950 z-40 w-16 min-w-[64px] max-w-[64px] px-2 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:text-white text-center"
+                  className="sticky top-0 left-0 bg-neutral-950 z-30 w-16 min-w-[64px] max-w-[64px] px-2 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:text-white text-center"
                   onClick={() => handleSort(SORT_FIELDS.activeListings)}
                   title="Number of active listings. Click to sort."
                 >
                   Active{sortIndicator(SORT_FIELDS.activeListings, sortField, sortDir)}
                 </th>
                 <th
-                  className="sticky top-0 left-16 isolate [transform:translateZ(0)] bg-neutral-950 z-40 min-w-[190px] px-2 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:text-white border-r border-neutral-600"
+                  className="sticky top-0 left-16 bg-neutral-950 z-30 min-w-[190px] px-2 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:text-white border-r border-neutral-600"
                   onClick={() => handleSort("name")}
                   title="Click to sort alphabetically. Default order: overdue follow-ups first, then active conversations, then Not Contacted, then closed deals at the bottom."
                 >
@@ -341,24 +341,28 @@ export default function AgencyTable() {
                     key={r.id}
                     className="border-b border-neutral-900 hover:bg-neutral-900/40"
                   >
-                    <Td className="sticky left-0 isolate [transform:translateZ(0)] z-30 bg-neutral-950 hover:bg-neutral-900/40 w-16 min-w-[64px] max-w-[64px] text-center">
-                      <EditableCell
-                        type="number"
-                        value={r.active_listings}
-                        onSave={(v) => patch(r.id, "active_listings", v === null ? 0 : Number(v))}
-                        className="text-center"
-                        cellId={`${r.id}:active_listings`}
-                      />
-                    </Td>
-                    <Td className="sticky left-16 isolate [transform:translateZ(0)] z-30 bg-neutral-950 hover:bg-neutral-900/40 font-medium border-r border-neutral-600">
-                      <button
-                        onClick={() => setInfoAgency(r)}
-                        className="text-left text-white hover:text-neutral-300 hover:underline truncate block w-full px-1 py-0.5"
-                        title="Click to view/edit contact info"
-                      >
-                        {r.name}
-                      </button>
-                    </Td>
+                    <td className="p-0 align-top w-16 min-w-[64px] max-w-[64px]">
+                      <div className="sticky left-0 z-20 isolate bg-neutral-950 hover:bg-neutral-900/40 h-full px-2 py-1 text-center">
+                        <EditableCell
+                          type="number"
+                          value={r.active_listings}
+                          onSave={(v) => patch(r.id, "active_listings", v === null ? 0 : Number(v))}
+                          className="text-center"
+                          cellId={`${r.id}:active_listings`}
+                        />
+                      </div>
+                    </td>
+                    <td className="p-0 align-top min-w-[190px] font-medium">
+                      <div className="sticky left-16 z-20 isolate bg-neutral-950 hover:bg-neutral-900/40 h-full px-2 py-1 border-r border-neutral-600">
+                        <button
+                          onClick={() => setInfoAgency(r)}
+                          className="text-left text-white hover:text-neutral-300 hover:underline truncate block w-full px-1 py-0.5"
+                          title="Click to view/edit contact info"
+                        >
+                          {r.name}
+                        </button>
+                      </div>
+                    </td>
                     <Td>
                       <EditableCell
                         type="select"
