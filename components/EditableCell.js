@@ -15,19 +15,35 @@ export default function EditableCell({
   options = null,
   placeholder = "",
   className = "",
-  // When set, a value longer than this many characters is shown clipped
+  // When true, a value that doesn't actually fit on one line is clipped
   // with "..." instead of running the row height/width out. Clicking it
   // expands to the full text (still read-only); clicking again from there
-  // opens the normal edit input, same as every other cell.
-  clampLength = null,
+  // opens the normal edit input, same as every other cell. Whether it's
+  // clipped is measured from the real rendered width, not a character
+  // count, so a short line of wide characters and a long line of narrow
+  // ones are both judged correctly.
+  clampable = false,
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? "");
   const [expanded, setExpanded] = useState(false);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+  const textRef = useRef(null);
 
   useEffect(() => {
     setDraft(value ?? "");
   }, [value]);
+
+  useEffect(() => {
+    if (!clampable || expanded) return;
+    function measure() {
+      const el = textRef.current;
+      if (el) setIsOverflowing(el.scrollWidth > el.clientWidth + 1);
+    }
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [value, expanded, clampable]);
 
   function commit() {
     setEditing(false);
@@ -88,25 +104,24 @@ export default function EditableCell({
 
   if (!editing) {
     const str = value || "";
-    const isClamped = !!clampLength && str.length > clampLength;
-    const showTruncated = isClamped && !expanded;
-    const display = showTruncated ? `${str.slice(0, clampLength)}...` : str;
+    const showWrapped = clampable && expanded;
 
     return (
       <div
+        ref={clampable ? textRef : undefined}
         onClick={() => {
-          if (showTruncated) {
+          if (clampable && !expanded && isOverflowing) {
             setExpanded(true);
           } else {
             setEditing(true);
           }
         }}
         className={`min-h-[28px] px-1 py-0.5 text-sm cursor-pointer rounded hover:bg-neutral-800/60 ${
-          showTruncated ? "truncate" : "whitespace-pre-wrap break-words"
+          showWrapped ? "whitespace-pre-wrap break-words" : "truncate"
         } ${className}`}
-        title={showTruncated ? "Click to expand" : value || ""}
+        title={clampable && !expanded && isOverflowing ? "Click to expand" : str}
       >
-        {display || <span className="text-neutral-600">{placeholder}</span>}
+        {str || <span className="text-neutral-600">{placeholder}</span>}
       </div>
     );
   }

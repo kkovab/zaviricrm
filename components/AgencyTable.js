@@ -369,7 +369,7 @@ export default function AgencyTable() {
                       <EditableCell
                         value={r.notes}
                         onSave={(v) => patch(r.id, "notes", v)}
-                        clampLength={70}
+                        clampable
                       />
                     </Td>
                     <Td>
