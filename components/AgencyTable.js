@@ -5,6 +5,8 @@ import EditableCell from "./EditableCell";
 import FollowupDrawer from "./FollowupDrawer";
 import AgencyInfoModal from "./AgencyInfoModal";
 import StatusManagerModal from "./StatusManagerModal";
+import PresenceProvider from "./PresenceProvider";
+import { supabaseClient } from "@/lib/supabaseClient";
 import {
   isFollowupOverdue,
   compareByPriority,
@@ -51,12 +53,53 @@ export default function AgencyTable() {
     loadStatuses();
   }, []);
 
-  async function load() {
-    setLoading(true);
+  // Live sync with whoever else has this open. Supabase notifies us the
+  // instant a row changes in the database (their save, not just ours), and
+  // we quietly refetch - no page reload, no "Loading..." flash. If the
+  // NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY env vars
+  // aren't set, supabaseClient() returns null and this just does nothing;
+  // the app still works fine without it, you'd just need to refresh
+  // manually to see someone else's changes.
+  useEffect(() => {
+    const client = supabaseClient();
+    if (!client) return;
+
+    let reloadTimer = null;
+    let statusTimer = null;
+
+    const channel = client
+      .channel("agency-outreach-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "agencies" },
+        () => {
+          clearTimeout(reloadTimer);
+          reloadTimer = setTimeout(() => load({ silent: true }), 400);
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "statuses" },
+        () => {
+          clearTimeout(statusTimer);
+          statusTimer = setTimeout(loadStatuses, 400);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      clearTimeout(reloadTimer);
+      clearTimeout(statusTimer);
+      client.removeChannel(channel);
+    };
+  }, []);
+
+  async function load({ silent = false } = {}) {
+    if (!silent) setLoading(true);
     const res = await fetch("/api/agencies");
     const json = await res.json();
     setRows(json.data || []);
-    setLoading(false);
+    if (!silent) setLoading(false);
   }
 
   async function loadStatuses() {
@@ -162,6 +205,7 @@ export default function AgencyTable() {
   );
 
   return (
+    <PresenceProvider>
     <div className="h-screen flex flex-col bg-neutral-950">
       <header className="border-b border-neutral-800 px-4 sm:px-6 py-4 flex flex-wrap items-center gap-3 justify-between shrink-0 bg-neutral-950 z-10">
         <div className="flex items-center gap-3">
@@ -303,6 +347,7 @@ export default function AgencyTable() {
                         value={r.active_listings}
                         onSave={(v) => patch(r.id, "active_listings", v === null ? 0 : Number(v))}
                         className="text-center"
+                        cellId={`${r.id}:active_listings`}
                       />
                     </Td>
                     <Td className="sticky left-16 bg-neutral-950 hover:bg-neutral-900/40 font-medium">
@@ -320,6 +365,7 @@ export default function AgencyTable() {
                         options={statusOptions}
                         value={r.status_id}
                         onSave={(v) => patch(r.id, "status_id", v)}
+                        cellId={`${r.id}:status_id`}
                       />
                     </Td>
                     <Td>
@@ -327,6 +373,7 @@ export default function AgencyTable() {
                         value={r.phone}
                         placeholder="Phone"
                         onSave={(v) => patch(r.id, "phone", v)}
+                        cellId={`${r.id}:phone`}
                       />
                     </Td>
                     <Computed>€{r.suggested_price_per_listing}</Computed>
@@ -336,6 +383,7 @@ export default function AgencyTable() {
                         type="date"
                         value={r.date_first_contacted}
                         onSave={(v) => patch(r.id, "date_first_contacted", v)}
+                        cellId={`${r.id}:date_first_contacted`}
                       />
                     </Td>
                     <Td>
@@ -343,6 +391,7 @@ export default function AgencyTable() {
                         type="date"
                         value={r.trial_start_date}
                         onSave={(v) => patch(r.id, "trial_start_date", v)}
+                        cellId={`${r.id}:trial_start_date`}
                       />
                     </Td>
                     <Computed>{formatDate(r.trial_end_date)}</Computed>
@@ -361,6 +410,7 @@ export default function AgencyTable() {
                         value={r.discount_percent}
                         placeholder="0"
                         onSave={(v) => patch(r.id, "discount_percent", v === null ? 0 : Number(v))}
+                        cellId={`${r.id}:discount_percent`}
                       />
                     </Td>
                     <Computed>{formatDate(r.last_followup_date)}</Computed>
@@ -371,6 +421,7 @@ export default function AgencyTable() {
                         value={r.next_followup_date}
                         onSave={(v) => patch(r.id, "next_followup_date", v)}
                         className={overdue ? "text-rose-200 font-medium" : ""}
+                        cellId={`${r.id}:next_followup_date`}
                       />
                     </Td>
                     <Td>
@@ -379,6 +430,7 @@ export default function AgencyTable() {
                         onSave={(v) => patch(r.id, "notes", v)}
                         clampable
                         className="w-[260px]"
+                        cellId={`${r.id}:notes`}
                       />
                     </Td>
                     <Td>
@@ -439,6 +491,7 @@ export default function AgencyTable() {
         />
       )}
     </div>
+    </PresenceProvider>
   );
 }
 
