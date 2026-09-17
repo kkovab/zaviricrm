@@ -8,6 +8,7 @@ import {
   STATUS_OPTIONS,
   STATUS_COLORS,
   isFollowupOverdue,
+  compareByPriority,
   formatDate,
 } from "@/lib/constants";
 
@@ -76,11 +77,13 @@ export default function AgencyTable() {
   }
 
   const filtered = useMemo(() => {
-    return rows.filter((r) => {
-      if (search && !r.name.toLowerCase().includes(search.toLowerCase())) return false;
-      if (onlyDue && !isFollowupOverdue(r)) return false;
-      return true;
-    });
+    return rows
+      .filter((r) => {
+        if (search && !r.name.toLowerCase().includes(search.toLowerCase())) return false;
+        if (onlyDue && !isFollowupOverdue(r)) return false;
+        return true;
+      })
+      .sort(compareByPriority);
   }, [rows, search, onlyDue]);
 
   const dueCount = useMemo(() => rows.filter(isFollowupOverdue).length, [rows]);
@@ -141,7 +144,12 @@ export default function AgencyTable() {
           <table className="min-w-[1750px] w-full border-collapse">
             <thead>
               <tr className="text-left text-xs text-neutral-400 border-b border-neutral-800">
-                <Th className="sticky left-0 bg-neutral-950 z-10 min-w-[190px]">Agency</Th>
+                <Th
+                  className="sticky left-0 bg-neutral-950 z-10 min-w-[190px]"
+                  title="Sorted by priority: overdue follow-ups first, then active conversations (Onboarded - Trial, Considering, Attempted - No Answer), then Not Contacted, then closed deals (Converted, Declined, Churned) at the bottom."
+                >
+                  Agency
+                </Th>
                 <Th className="min-w-[150px]">Status</Th>
                 <Th className="min-w-[110px]">Suggested €/listing</Th>
                 <Th className="min-w-[120px]">Est. monthly €</Th>
