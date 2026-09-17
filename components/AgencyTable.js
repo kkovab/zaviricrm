@@ -341,28 +341,24 @@ export default function AgencyTable() {
                     key={r.id}
                     className="border-b border-neutral-900 hover:bg-neutral-900/40"
                   >
-                    <td className="p-0 align-top w-16 min-w-[64px] max-w-[64px]">
-                      <div className="sticky left-0 z-20 isolate bg-neutral-950 hover:bg-neutral-900/40 h-full px-2 py-1 text-center">
-                        <EditableCell
-                          type="number"
-                          value={r.active_listings}
-                          onSave={(v) => patch(r.id, "active_listings", v === null ? 0 : Number(v))}
-                          className="text-center"
-                          cellId={`${r.id}:active_listings`}
-                        />
-                      </div>
-                    </td>
-                    <td className="p-0 align-top min-w-[190px] font-medium">
-                      <div className="sticky left-16 z-20 isolate bg-neutral-950 hover:bg-neutral-900/40 h-full px-2 py-1 border-r border-neutral-600">
-                        <button
-                          onClick={() => setInfoAgency(r)}
-                          className="text-left text-white hover:text-neutral-300 hover:underline truncate block w-full px-1 py-0.5"
-                          title="Click to view/edit contact info"
-                        >
-                          {r.name}
-                        </button>
-                      </div>
-                    </td>
+                    <Td className="sticky left-0 z-20 bg-neutral-950 hover:bg-neutral-900/40 w-16 min-w-[64px] max-w-[64px] text-center">
+                      <EditableCell
+                        type="number"
+                        value={r.active_listings}
+                        onSave={(v) => patch(r.id, "active_listings", v === null ? 0 : Number(v))}
+                        className="text-center"
+                        cellId={`${r.id}:active_listings`}
+                      />
+                    </Td>
+                    <Td className="sticky left-16 z-20 bg-neutral-950 hover:bg-neutral-900/40 font-medium border-r border-neutral-600">
+                      <button
+                        onClick={() => setInfoAgency(r)}
+                        className="text-left text-white hover:text-neutral-300 hover:underline truncate block w-full px-1 py-0.5"
+                        title="Click to view/edit contact info"
+                      >
+                        {r.name}
+                      </button>
+                    </Td>
                     <Td>
                       <EditableCell
                         type="select"
