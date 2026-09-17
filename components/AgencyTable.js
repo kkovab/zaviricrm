@@ -8,7 +8,6 @@ import StatusManagerModal from "./StatusManagerModal";
 import {
   isFollowupOverdue,
   compareByPriority,
-  contrastTextColor,
   formatDate,
 } from "@/lib/constants";
 
@@ -159,7 +158,7 @@ export default function AgencyTable() {
   const dueCount = useMemo(() => rows.filter(isFollowupOverdue).length, [rows]);
 
   const statusOptions = useMemo(
-    () => statuses.map((s) => ({ value: s.id, label: s.name })),
+    () => statuses.map((s) => ({ value: s.id, label: s.name, color: s.color })),
     [statuses]
   );
 
@@ -304,20 +303,12 @@ export default function AgencyTable() {
                       </button>
                     </Td>
                     <Td>
-                      <span
-                        className="inline-block w-full rounded"
-                        style={{
-                          backgroundColor: r.status_color || "#6b7280",
-                          color: contrastTextColor(r.status_color),
-                        }}
-                      >
-                        <EditableCell
-                          type="select"
-                          options={statusOptions}
-                          value={r.status_id}
-                          onSave={(v) => patch(r.id, "status_id", v)}
-                        />
-                      </span>
+                      <EditableCell
+                        type="select"
+                        options={statusOptions}
+                        value={r.status_id}
+                        onSave={(v) => patch(r.id, "status_id", v)}
+                      />
                     </Td>
                     <Computed>€{r.suggested_price_per_listing}</Computed>
                     <Computed>€{r.est_monthly_value}</Computed>

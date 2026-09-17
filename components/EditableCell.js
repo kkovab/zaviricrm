@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { contrastTextColor } from "@/lib/constants";
 
 /**
  * A cell that looks like plain text until clicked, then turns into an
@@ -39,6 +41,17 @@ export default function EditableCell({
     const opts = (options || []).map((opt) =>
       typeof opt === "string" ? { value: opt, label: opt } : opt
     );
+
+    // When options carry a color (e.g. custom statuses), a native <select>
+    // won't do - most browsers render the OS's own dropdown popup for
+    // <option> elements and ignore inline background-color/color styling
+    // there, even though it works fine on the closed control. So for
+    // colored options we render our own dropdown instead, which we fully
+    // control and can guarantee shows color.
+    if (opts.some((opt) => opt.color)) {
+      return <ColorDropdown options={opts} value={value} onChange={onSave} />;
+    }
+
     return (
       <select
         value={value ?? ""}
@@ -90,5 +103,112 @@ export default function EditableCell({
       }}
       className={`w-full bg-neutral-800 border border-[#f01546] rounded px-1 py-0.5 text-sm focus:outline-none ${className}`}
     />
+  );
+}
+
+/**
+ * A dropdown for options that carry a color (custom statuses), rendered
+ * entirely with our own markup instead of a native <select>/<option> so the
+ * colors are guaranteed to show up in the open list, not just the closed
+ * control. The floating list is rendered into document.body via a portal so
+ * it always draws on top of the table instead of getting clipped by the
+ * table's horizontal-scroll container.
+ */
+function ColorDropdown({ options, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [rect, setRect] = useState(null);
+  const [hoverValue, setHoverValue] = useState(null);
+  const btnRef = useRef(null);
+  const panelRef = useRef(null);
+
+  const selected = options.find((o) => o.value === value) || null;
+  const fallbackColor = "#52525b";
+
+  function toggle() {
+    if (!open && btnRef.current) {
+      setRect(btnRef.current.getBoundingClientRect());
+    }
+    setOpen((v) => !v);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+
+    function reposition() {
+      if (btnRef.current) setRect(btnRef.current.getBoundingClientRect());
+    }
+    function onDocMouseDown(e) {
+      if (panelRef.current?.contains(e.target) || btnRef.current?.contains(e.target)) return;
+      setOpen(false);
+    }
+    function onKeyDown(e) {
+      if (e.key === "Escape") setOpen(false);
+    }
+
+    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("scroll", reposition, true);
+      window.removeEventListener("resize", reposition);
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        type="button"
+        ref={btnRef}
+        onClick={toggle}
+        className="w-full flex items-center justify-between gap-1 rounded px-1.5 py-1 text-sm cursor-pointer truncate"
+        style={{
+          backgroundColor: selected?.color || fallbackColor,
+          color: contrastTextColor(selected?.color || fallbackColor),
+        }}
+      >
+        <span className="truncate">{selected?.label || "-"}</span>
+        <span className="opacity-70 text-[9px] shrink-0">▾</span>
+      </button>
+
+      {open &&
+        rect &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={panelRef}
+            className="fixed z-[1000] rounded-lg overflow-hidden shadow-2xl ring-1 ring-black/40"
+            style={{ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 170) }}
+          >
+            {options.map((opt) => {
+              const bg = opt.color || fallbackColor;
+              const isHover = hoverValue === opt.value;
+              return (
+                <div
+                  key={opt.value}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onChange(opt.value);
+                    setOpen(false);
+                  }}
+                  onMouseEnter={() => setHoverValue(opt.value)}
+                  onMouseLeave={() => setHoverValue(null)}
+                  className="px-3 py-2 text-sm cursor-pointer"
+                  style={{
+                    backgroundColor: bg,
+                    color: contrastTextColor(bg),
+                    filter: isHover ? "brightness(1.15)" : "none",
+                  }}
+                >
+                  {opt.label}
+                </div>
+              );
+            })}
+          </div>,
+          document.body
+        )}
+    </>
   );
 }
