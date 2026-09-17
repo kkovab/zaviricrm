@@ -5,9 +5,14 @@ const COOKIE_NAME = "zaviri_auth";
 export function middleware(request) {
   const { pathname } = request.nextUrl;
 
-  // Always allow the login page itself and the login API to load,
-  // otherwise nobody could ever get in.
-  if (pathname.startsWith("/login") || pathname.startsWith("/api/login")) {
+  // Always allow the login page itself, the login API, and the logo image
+  // to load - otherwise nobody could ever get in (and the login page's own
+  // logo would 404/redirect instead of rendering).
+  if (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/api/login") ||
+    pathname === "/logo.webp"
+  ) {
     return NextResponse.next();
   }
 
