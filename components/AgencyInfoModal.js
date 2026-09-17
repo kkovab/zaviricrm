@@ -68,7 +68,7 @@ export default function AgencyInfoModal({ agency, onClose, onSaved }) {
                 type={f.type || "text"}
                 value={form[f.key]}
                 onChange={(e) => setField(f.key, e.target.value)}
-                className="mt-1 w-full bg-neutral-800 border border-neutral-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="mt-1 w-full bg-neutral-800 border border-neutral-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#f01546]"
               />
             </label>
           ))}
@@ -78,7 +78,7 @@ export default function AgencyInfoModal({ agency, onClose, onSaved }) {
           <button
             onClick={save}
             disabled={saving}
-            className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-medium py-2 rounded transition"
+            className="w-full bg-[#f01546] hover:bg-[#f2426a] disabled:opacity-50 text-white text-sm font-medium py-2 rounded transition"
           >
             {saving ? "Saving..." : "Save"}
           </button>

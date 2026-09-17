@@ -38,7 +38,7 @@ export default function EditableCell({
       <select
         value={value ?? ""}
         onChange={(e) => onSave(e.target.value)}
-        className={`w-full bg-transparent border-none focus:ring-1 focus:ring-emerald-500 rounded px-1 py-0.5 text-sm cursor-pointer ${className}`}
+        className={`w-full bg-transparent border-none focus:ring-1 focus:ring-[#f01546] rounded px-1 py-0.5 text-sm cursor-pointer ${className}`}
       >
         {options.map((opt) => (
           <option key={opt} value={opt} className="bg-neutral-900 text-neutral-100">
@@ -55,7 +55,7 @@ export default function EditableCell({
         type="checkbox"
         checked={!!value}
         onChange={(e) => onSave(e.target.checked)}
-        className="w-4 h-4 accent-emerald-500 cursor-pointer"
+        className="w-4 h-4 accent-[#f01546] cursor-pointer"
       />
     );
   }
@@ -83,7 +83,7 @@ export default function EditableCell({
         if (e.key === "Enter") commit();
         if (e.key === "Escape") cancel();
       }}
-      className={`w-full bg-neutral-800 border border-emerald-500 rounded px-1 py-0.5 text-sm focus:outline-none ${className}`}
+      className={`w-full bg-neutral-800 border border-[#f01546] rounded px-1 py-0.5 text-sm focus:outline-none ${className}`}
     />
   );
 }

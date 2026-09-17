@@ -106,7 +106,7 @@ export default function AgencyTable() {
             placeholder="Search agencies..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            className="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-[#f01546]"
           />
           <button
             onClick={() => setOnlyDue((v) => !v)}
@@ -124,7 +124,7 @@ export default function AgencyTable() {
               placeholder="New agency name..."
               value={addingName}
               onChange={(e) => setAddingName(e.target.value)}
-              className="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-44"
+              className="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-[#f01546] w-44"
             />
             <button
               type="submit"
@@ -178,7 +178,7 @@ export default function AgencyTable() {
                     <Td className="sticky left-0 bg-neutral-950 hover:bg-neutral-900/40 font-medium">
                       <button
                         onClick={() => setInfoAgency(r)}
-                        className="text-left text-[#f01546] hover:text-[#f2426a] hover:underline truncate block w-full px-1 py-0.5"
+                        className="text-left text-white hover:text-neutral-300 hover:underline truncate block w-full px-1 py-0.5"
                         title="Click to view/edit contact info"
                       >
                         {r.name}
@@ -252,7 +252,7 @@ export default function AgencyTable() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setDrawerAgency(r)}
-                          className="text-xs text-emerald-400 hover:text-emerald-300"
+                          className="text-xs text-[#f01546] hover:text-[#f2426a]"
                         >
                           Follow-ups
                         </button>

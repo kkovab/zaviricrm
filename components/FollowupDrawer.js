@@ -123,7 +123,7 @@ export default function FollowupDrawer({ agency, onClose, onLogged }) {
           <button
             type="submit"
             disabled={saving}
-            className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-medium py-2 rounded transition"
+            className="w-full bg-[#f01546] hover:bg-[#f2426a] disabled:opacity-50 text-white text-sm font-medium py-2 rounded transition"
           >
             {saving ? "Saving..." : "Log follow-up"}
           </button>
