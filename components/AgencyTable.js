@@ -23,7 +23,6 @@ const SORT_FIELDS = {
   trialStart: "trial_start_date",
   trialEnd: "trial_end_date",
   daysLeft: "days_left_in_trial",
-  discountOffered: "discount_offered",
   discountPercent: "discount_percent",
   lastFollowup: "last_followup_date",
   followupCount: "followup_count",
@@ -258,7 +257,6 @@ export default function AgencyTable() {
                 <SortTh label="Trial start" field={SORT_FIELDS.trialStart} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
                 <SortTh label="Trial end" field={SORT_FIELDS.trialEnd} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
                 <SortTh label="Days left" field={SORT_FIELDS.daysLeft} {...{ sortField, sortDir, handleSort }} className="min-w-[90px]" />
-                <SortTh label="Discount offered" field={SORT_FIELDS.discountOffered} {...{ sortField, sortDir, handleSort }} className="min-w-[200px]" />
                 <SortTh
                   label="Discount %"
                   field={SORT_FIELDS.discountPercent}
@@ -343,12 +341,6 @@ export default function AgencyTable() {
                     </Computed>
                     <Td>
                       <EditableCell
-                        value={r.discount_offered}
-                        onSave={(v) => patch(r.id, "discount_offered", v)}
-                      />
-                    </Td>
-                    <Td>
-                      <EditableCell
                         type="number"
                         value={r.discount_percent}
                         placeholder="0"
@@ -394,7 +386,7 @@ export default function AgencyTable() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={15} className="text-center text-neutral-600 text-sm py-10">
+                  <td colSpan={14} className="text-center text-neutral-600 text-sm py-10">
                     No agencies match.
                   </td>
                 </tr>
