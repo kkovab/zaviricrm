@@ -124,7 +124,7 @@ export default function StatusManagerModal({ statuses, onClose, onChanged }) {
               />
               <label
                 className="flex items-center gap-1 text-xs text-neutral-400 shrink-0"
-                title='No more outreach needed once an agency reaches this status - it\'s excluded from overdue follow-ups and sinks to the bottom of the list.'
+                title="No more outreach needed once an agency reaches this status - it's excluded from overdue follow-ups and sinks to the bottom of the list."
               >
                 <input
                   type="checkbox"
