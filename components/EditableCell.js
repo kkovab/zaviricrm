@@ -179,7 +179,7 @@ function ColorDropdown({ options, value, onChange }) {
         createPortal(
           <div
             ref={panelRef}
-            className="fixed z-[1000] rounded-lg overflow-hidden shadow-2xl ring-1 ring-black/40"
+            className="fixed z-[1000] flex flex-col gap-1.5 p-1.5 rounded-xl shadow-2xl ring-1 ring-black/40 bg-neutral-900"
             style={{ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 170) }}
           >
             {options.map((opt) => {
@@ -195,7 +195,7 @@ function ColorDropdown({ options, value, onChange }) {
                   }}
                   onMouseEnter={() => setHoverValue(opt.value)}
                   onMouseLeave={() => setHoverValue(null)}
-                  className="px-3 py-2 text-sm cursor-pointer"
+                  className="px-3 py-2 text-sm rounded-lg cursor-pointer transition"
                   style={{
                     backgroundColor: bg,
                     color: contrastTextColor(bg),
