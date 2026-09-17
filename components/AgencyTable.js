@@ -295,7 +295,7 @@ export default function AgencyTable() {
                   Active{sortIndicator(SORT_FIELDS.activeListings, sortField, sortDir)}
                 </th>
                 <th
-                  className="sticky top-0 left-16 bg-neutral-950 z-30 min-w-[190px] px-2 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:text-white"
+                  className="sticky top-0 left-16 bg-neutral-950 z-30 min-w-[190px] px-2 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:text-white border-r border-neutral-700"
                   onClick={() => handleSort("name")}
                   title="Click to sort alphabetically. Default order: overdue follow-ups first, then active conversations, then Not Contacted, then closed deals at the bottom."
                 >
@@ -350,7 +350,7 @@ export default function AgencyTable() {
                         cellId={`${r.id}:active_listings`}
                       />
                     </Td>
-                    <Td className="sticky left-16 z-20 bg-neutral-950 hover:bg-neutral-900/40 font-medium">
+                    <Td className="sticky left-16 z-20 bg-neutral-950 hover:bg-neutral-900/40 font-medium border-r border-neutral-700">
                       <button
                         onClick={() => setInfoAgency(r)}
                         className="text-left text-white hover:text-neutral-300 hover:underline truncate block w-full px-1 py-0.5"
