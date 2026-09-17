@@ -6,6 +6,7 @@ create extension if not exists "pgcrypto";
 create table if not exists agencies (
   id uuid primary key default gen_random_uuid(),
   name text not null,
+  contact_person text,
   phone text,
   mobile_alt text,
   email text,
@@ -28,6 +29,10 @@ create table if not exists agencies (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- If you already ran an earlier version of this file, this line adds the
+-- new column without touching your existing data. Safe to run again.
+alter table agencies add column if not exists contact_person text;
 
 create table if not exists followups (
   id uuid primary key default gen_random_uuid(),

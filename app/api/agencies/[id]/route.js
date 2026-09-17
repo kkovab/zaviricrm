@@ -5,6 +5,7 @@ import { supabaseServer } from "@/lib/supabaseServer";
 // (from the agency_overview view) are never written back.
 const EDITABLE_FIELDS = [
   "name",
+  "contact_person",
   "phone",
   "mobile_alt",
   "email",

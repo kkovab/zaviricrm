@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import EditableCell from "./EditableCell";
 import FollowupDrawer from "./FollowupDrawer";
+import AgencyInfoModal from "./AgencyInfoModal";
 import {
   STATUS_OPTIONS,
   STATUS_COLORS,
@@ -16,6 +17,7 @@ export default function AgencyTable() {
   const [search, setSearch] = useState("");
   const [onlyDue, setOnlyDue] = useState(false);
   const [drawerAgency, setDrawerAgency] = useState(null);
+  const [infoAgency, setInfoAgency] = useState(null);
   const [addingName, setAddingName] = useState("");
   const [adding, setAdding] = useState(false);
 
@@ -133,15 +135,10 @@ export default function AgencyTable() {
         {loading ? (
           <p className="text-neutral-500 text-sm p-6">Loading...</p>
         ) : (
-          <table className="min-w-[2100px] w-full border-collapse">
+          <table className="min-w-[1750px] w-full border-collapse">
             <thead>
               <tr className="text-left text-xs text-neutral-400 border-b border-neutral-800">
-                <Th className="sticky left-0 bg-neutral-950 z-10 min-w-[200px]">Agency</Th>
-                <Th className="min-w-[130px]">Phone</Th>
-                <Th className="min-w-[130px]">Mobile Alt</Th>
-                <Th className="min-w-[170px]">Email</Th>
-                <Th className="min-w-[110px]">Location</Th>
-                <Th className="min-w-[90px]">Listings</Th>
+                <Th className="sticky left-0 bg-neutral-950 z-10 min-w-[190px]">Agency</Th>
                 <Th className="min-w-[150px]">Status</Th>
                 <Th className="min-w-[110px]">Suggested €/listing</Th>
                 <Th className="min-w-[120px]">Est. monthly €</Th>
@@ -168,35 +165,13 @@ export default function AgencyTable() {
                     className="border-b border-neutral-900 hover:bg-neutral-900/40"
                   >
                     <Td className="sticky left-0 bg-neutral-950 hover:bg-neutral-900/40 font-medium">
-                      <EditableCell
-                        value={r.name}
-                        onSave={(v) => patch(r.id, "name", v)}
-                      />
-                    </Td>
-                    <Td>
-                      <EditableCell value={r.phone} onSave={(v) => patch(r.id, "phone", v)} />
-                    </Td>
-                    <Td>
-                      <EditableCell
-                        value={r.mobile_alt}
-                        onSave={(v) => patch(r.id, "mobile_alt", v)}
-                      />
-                    </Td>
-                    <Td>
-                      <EditableCell value={r.email} onSave={(v) => patch(r.id, "email", v)} />
-                    </Td>
-                    <Td>
-                      <EditableCell
-                        value={r.location}
-                        onSave={(v) => patch(r.id, "location", v)}
-                      />
-                    </Td>
-                    <Td>
-                      <EditableCell
-                        type="number"
-                        value={r.active_listings}
-                        onSave={(v) => patch(r.id, "active_listings", Number(v) || 0)}
-                      />
+                      <button
+                        onClick={() => setInfoAgency(r)}
+                        className="text-left text-emerald-300 hover:text-emerald-200 hover:underline truncate block w-full px-1 py-0.5"
+                        title="Click to view/edit contact info"
+                      >
+                        {r.name}
+                      </button>
                     </Td>
                     <Td>
                       <span
@@ -283,7 +258,7 @@ export default function AgencyTable() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={20} className="text-center text-neutral-600 text-sm py-10">
+                  <td colSpan={16} className="text-center text-neutral-600 text-sm py-10">
                     No agencies match.
                   </td>
                 </tr>
@@ -298,6 +273,14 @@ export default function AgencyTable() {
           agency={drawerAgency}
           onClose={() => setDrawerAgency(null)}
           onLogged={load}
+        />
+      )}
+
+      {infoAgency && (
+        <AgencyInfoModal
+          agency={infoAgency}
+          onClose={() => setInfoAgency(null)}
+          onSaved={load}
         />
       )}
     </div>
