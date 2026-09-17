@@ -88,11 +88,14 @@ export default function AgencyTable() {
   return (
     <div className="min-h-screen bg-neutral-950">
       <header className="border-b border-neutral-800 px-4 sm:px-6 py-4 flex flex-wrap items-center gap-3 justify-between sticky top-0 bg-neutral-950 z-10">
-        <div>
-          <h1 className="text-lg font-semibold text-white">Zaviri — Agency Outreach</h1>
-          <p className="text-xs text-neutral-500">
-            {rows.length} agencies · {dueCount} follow-up{dueCount === 1 ? "" : "s"} due
-          </p>
+        <div className="flex items-center gap-3">
+          <img src="/logo.webp" alt="Logo" className="h-8 w-8 rounded shrink-0" />
+          <div>
+            <h1 className="text-lg font-semibold text-white">Agency Outreach</h1>
+            <p className="text-xs text-neutral-500">
+              {rows.length} agencies · {dueCount} follow-up{dueCount === 1 ? "" : "s"} due
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -123,7 +126,7 @@ export default function AgencyTable() {
             <button
               type="submit"
               disabled={adding}
-              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition"
+              className="bg-[#f01546] hover:bg-[#f2426a] disabled:opacity-50 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition"
             >
               + Add
             </button>
@@ -167,7 +170,7 @@ export default function AgencyTable() {
                     <Td className="sticky left-0 bg-neutral-950 hover:bg-neutral-900/40 font-medium">
                       <button
                         onClick={() => setInfoAgency(r)}
-                        className="text-left text-emerald-300 hover:text-emerald-200 hover:underline truncate block w-full px-1 py-0.5"
+                        className="text-left text-[#f01546] hover:text-[#f2426a] hover:underline truncate block w-full px-1 py-0.5"
                         title="Click to view/edit contact info"
                       >
                         {r.name}
