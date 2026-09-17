@@ -366,7 +366,11 @@ export default function AgencyTable() {
                       />
                     </Td>
                     <Td>
-                      <EditableCell value={r.notes} onSave={(v) => patch(r.id, "notes", v)} />
+                      <EditableCell
+                        value={r.notes}
+                        onSave={(v) => patch(r.id, "notes", v)}
+                        clampLength={70}
+                      />
                     </Td>
                     <Td>
                       <div className="flex items-center gap-2">

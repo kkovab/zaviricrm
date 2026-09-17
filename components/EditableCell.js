@@ -15,9 +15,15 @@ export default function EditableCell({
   options = null,
   placeholder = "",
   className = "",
+  // When set, a value longer than this many characters is shown clipped
+  // with "..." instead of running the row height/width out. Clicking it
+  // expands to the full text (still read-only); clicking again from there
+  // opens the normal edit input, same as every other cell.
+  clampLength = null,
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? "");
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     setDraft(value ?? "");
@@ -25,6 +31,7 @@ export default function EditableCell({
 
   function commit() {
     setEditing(false);
+    setExpanded(false);
     if (draft !== (value ?? "")) {
       onSave(draft === "" ? null : draft);
     }
@@ -33,6 +40,7 @@ export default function EditableCell({
   function cancel() {
     setDraft(value ?? "");
     setEditing(false);
+    setExpanded(false);
   }
 
   if (type === "select") {
@@ -79,13 +87,26 @@ export default function EditableCell({
   }
 
   if (!editing) {
+    const str = value || "";
+    const isClamped = !!clampLength && str.length > clampLength;
+    const showTruncated = isClamped && !expanded;
+    const display = showTruncated ? `${str.slice(0, clampLength)}...` : str;
+
     return (
       <div
-        onClick={() => setEditing(true)}
-        className={`min-h-[28px] px-1 py-0.5 text-sm cursor-text rounded hover:bg-neutral-800/60 truncate ${className}`}
-        title={value || ""}
+        onClick={() => {
+          if (showTruncated) {
+            setExpanded(true);
+          } else {
+            setEditing(true);
+          }
+        }}
+        className={`min-h-[28px] px-1 py-0.5 text-sm cursor-pointer rounded hover:bg-neutral-800/60 ${
+          showTruncated ? "truncate" : "whitespace-pre-wrap break-words"
+        } ${className}`}
+        title={showTruncated ? "Click to expand" : value || ""}
       >
-        {value || <span className="text-neutral-600">{placeholder}</span>}
+        {display || <span className="text-neutral-600">{placeholder}</span>}
       </div>
     );
   }
