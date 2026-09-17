@@ -10,9 +10,16 @@ const FIELDS = [
   { key: "email", label: "Email" },
   { key: "location", label: "Location" },
   { key: "active_listings", label: "Active Listings", type: "number" },
-  { key: "oglasnik_profil", label: "Oglasnik Profile Link" },
-  { key: "website", label: "Website / IG" },
+  { key: "oglasnik_profil", label: "Oglasnik Profile Link", isLink: true },
+  { key: "website", label: "Website / IG", isLink: true },
 ];
+
+// Field values are stored however the user typed them (with or without a
+// protocol) - normalize so the link always actually navigates instead of
+// being treated as a relative path on this same site.
+function toHref(value) {
+  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+}
 
 export default function AgencyInfoModal({ agency, onClose, onSaved }) {
   const [form, setForm] = useState(() => {
@@ -63,7 +70,20 @@ export default function AgencyInfoModal({ agency, onClose, onSaved }) {
         <div className="px-5 py-4 space-y-3">
           {FIELDS.map((f) => (
             <label key={f.key} className="text-xs text-neutral-400 block">
-              {f.label}
+              <span className="flex items-center justify-between gap-2">
+                {f.label}
+                {f.isLink && form[f.key]?.trim() && (
+                  <a
+                    href={toHref(form[f.key].trim())}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-[#f01546] hover:text-[#f2426a] normal-case font-normal shrink-0"
+                  >
+                    Open ↗
+                  </a>
+                )}
+              </span>
               <input
                 type={f.type || "text"}
                 value={form[f.key]}
