@@ -22,9 +22,29 @@ export async function POST(request) {
     return NextResponse.json({ error: "Agency name is required." }, { status: 400 });
   }
 
+  // New agencies start out at the "Not Contacted" status (falling back to
+  // whichever status sorts first, in case "Not Contacted" was renamed).
+  let statusId = null;
+  const { data: defaultStatus } = await supabase
+    .from("statuses")
+    .select("id")
+    .eq("name", "Not Contacted")
+    .maybeSingle();
+  if (defaultStatus) {
+    statusId = defaultStatus.id;
+  } else {
+    const { data: firstStatus } = await supabase
+      .from("statuses")
+      .select("id")
+      .order("sort_order", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    statusId = firstStatus?.id ?? null;
+  }
+
   const { data, error } = await supabase
     .from("agencies")
-    .insert({ name: body.name.trim() })
+    .insert({ name: body.name.trim(), status_id: statusId })
     .select()
     .single();
 

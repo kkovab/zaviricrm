@@ -34,15 +34,20 @@ export default function EditableCell({
   }
 
   if (type === "select") {
+    // options can be plain strings, or {value, label} objects when the
+    // saved value (e.g. a status_id) needs to differ from what's displayed.
+    const opts = (options || []).map((opt) =>
+      typeof opt === "string" ? { value: opt, label: opt } : opt
+    );
     return (
       <select
         value={value ?? ""}
         onChange={(e) => onSave(e.target.value)}
         className={`w-full bg-transparent border-none focus:ring-1 focus:ring-[#f01546] rounded px-1 py-0.5 text-sm cursor-pointer ${className}`}
       >
-        {options.map((opt) => (
-          <option key={opt} value={opt} className="bg-neutral-900 text-neutral-100">
-            {opt}
+        {opts.map((opt) => (
+          <option key={opt.value} value={opt.value} className="bg-neutral-900 text-neutral-100">
+            {opt.label}
           </option>
         ))}
       </select>

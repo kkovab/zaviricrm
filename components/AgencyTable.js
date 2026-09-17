@@ -4,26 +4,53 @@ import { useEffect, useMemo, useState } from "react";
 import EditableCell from "./EditableCell";
 import FollowupDrawer from "./FollowupDrawer";
 import AgencyInfoModal from "./AgencyInfoModal";
+import StatusManagerModal from "./StatusManagerModal";
 import {
-  STATUS_OPTIONS,
-  STATUS_COLORS,
   isFollowupOverdue,
   compareByPriority,
+  contrastTextColor,
   formatDate,
 } from "@/lib/constants";
 
+// Which row field each column header sorts by when clicked. Columns left out
+// (the sticky Agency name gets special handling below, and the trailing
+// actions column) aren't sortable.
+const SORT_FIELDS = {
+  status: "status_sort_order",
+  suggested: "suggested_price_per_listing",
+  monthly: "est_monthly_value",
+  firstContacted: "date_first_contacted",
+  trialStart: "trial_start_date",
+  trialEnd: "trial_end_date",
+  daysLeft: "days_left_in_trial",
+  discountOffered: "discount_offered",
+  discountPercent: "discount_percent",
+  lastFollowup: "last_followup_date",
+  followupCount: "followup_count",
+  nextFollowup: "next_followup_date",
+  whatTheyKnow: "what_they_know",
+  stillNeed: "what_they_still_need",
+  notes: "notes",
+};
+
 export default function AgencyTable() {
   const [rows, setRows] = useState([]);
+  const [statuses, setStatuses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [onlyDue, setOnlyDue] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [sortField, setSortField] = useState(null);
+  const [sortDir, setSortDir] = useState("asc");
   const [drawerAgency, setDrawerAgency] = useState(null);
   const [infoAgency, setInfoAgency] = useState(null);
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [addingName, setAddingName] = useState("");
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     load();
+    loadStatuses();
   }, []);
 
   async function load() {
@@ -32,6 +59,12 @@ export default function AgencyTable() {
     const json = await res.json();
     setRows(json.data || []);
     setLoading(false);
+  }
+
+  async function loadStatuses() {
+    const res = await fetch("/api/statuses");
+    const json = await res.json();
+    setStatuses(json.data || []);
   }
 
   async function patch(id, field, value) {
@@ -48,10 +81,11 @@ export default function AgencyTable() {
     } else if (
       field === "active_listings" ||
       field === "trial_start_date" ||
-      field === "discount_percent"
+      field === "discount_percent" ||
+      field === "status_id"
     ) {
-      // These affect computed columns (price tier, trial end date) - refresh
-      // that row's derived values from the server.
+      // These affect computed columns (price tier, trial end date, status
+      // color/closed-flag/sort order) - refresh derived values from the server.
       load();
     }
   }
@@ -80,17 +114,54 @@ export default function AgencyTable() {
     await fetch(`/api/agencies/${id}`, { method: "DELETE" });
   }
 
+  function handleSort(field) {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+  }
+
   const filtered = useMemo(() => {
-    return rows
-      .filter((r) => {
-        if (search && !r.name.toLowerCase().includes(search.toLowerCase())) return false;
-        if (onlyDue && !isFollowupOverdue(r)) return false;
-        return true;
-      })
-      .sort(compareByPriority);
-  }, [rows, search, onlyDue]);
+    const result = rows.filter((r) => {
+      if (search && !r.name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (onlyDue && !isFollowupOverdue(r)) return false;
+      if (statusFilter && r.status_id !== statusFilter) return false;
+      return true;
+    });
+
+    if (!sortField) {
+      return result.sort(compareByPriority);
+    }
+
+    return result.sort((a, b) => {
+      const valA = a[sortField];
+      const valB = b[sortField];
+      let cmp;
+      if (valA == null && valB == null) cmp = 0;
+      else if (valA == null) cmp = 1;
+      else if (valB == null) cmp = -1;
+      else if (typeof valA === "number" && typeof valB === "number") cmp = valA - valB;
+      else {
+        const dateA = Date.parse(valA);
+        const dateB = Date.parse(valB);
+        if (!Number.isNaN(dateA) && !Number.isNaN(dateB) && /^\d{4}-\d{2}-\d{2}/.test(String(valA))) {
+          cmp = dateA - dateB;
+        } else {
+          cmp = String(valA).localeCompare(String(valB));
+        }
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [rows, search, onlyDue, statusFilter, sortField, sortDir]);
 
   const dueCount = useMemo(() => rows.filter(isFollowupOverdue).length, [rows]);
+
+  const statusOptions = useMemo(
+    () => statuses.map((s) => ({ value: s.id, label: s.name })),
+    [statuses]
+  );
 
   return (
     <div className="min-h-screen bg-neutral-950">
@@ -112,6 +183,18 @@ export default function AgencyTable() {
             onChange={(e) => setSearch(e.target.value)}
             className="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-[#f01546]"
           />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#f01546]"
+          >
+            <option value="">All statuses</option>
+            {statuses.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
           <button
             onClick={() => setOnlyDue((v) => !v)}
             className={`text-sm px-3 py-1.5 rounded-lg border transition ${
@@ -121,6 +204,20 @@ export default function AgencyTable() {
             }`}
           >
             Due follow-ups only
+          </button>
+          {sortField && (
+            <button
+              onClick={() => setSortField(null)}
+              className="text-xs text-neutral-500 hover:text-white underline"
+            >
+              Reset to priority order
+            </button>
+          )}
+          <button
+            onClick={() => setStatusModalOpen(true)}
+            className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-300 hover:border-neutral-600"
+          >
+            Manage Statuses
           </button>
           <form onSubmit={addAgency} className="flex items-center gap-2">
             <input
@@ -148,32 +245,44 @@ export default function AgencyTable() {
           <table className="min-w-[1750px] w-full border-collapse">
             <thead>
               <tr className="text-left text-xs text-neutral-400 border-b border-neutral-800">
-                <Th
-                  className="sticky left-0 bg-neutral-950 z-10 min-w-[190px]"
-                  title="Sorted by priority: overdue follow-ups first, then active conversations (Onboarded - Trial, Considering, Attempted - No Answer), then Not Contacted, then closed deals (Converted, Declined, Churned) at the bottom."
+                <th
+                  className="sticky left-0 bg-neutral-950 z-10 min-w-[190px] px-2 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:text-white"
+                  onClick={() => handleSort("name")}
+                  title="Click to sort alphabetically. Default order: overdue follow-ups first, then active conversations, then Not Contacted, then closed deals at the bottom."
                 >
-                  Agency
-                </Th>
-                <Th className="min-w-[150px]">Status</Th>
-                <Th className="min-w-[110px]">Suggested €/listing</Th>
-                <Th className="min-w-[120px]">Est. monthly €</Th>
-                <Th className="min-w-[130px]">First contacted</Th>
-                <Th className="min-w-[130px]">Trial start</Th>
-                <Th className="min-w-[130px]">Trial end</Th>
-                <Th className="min-w-[90px]">Days left</Th>
-                <Th className="min-w-[200px]">Discount offered</Th>
-                <Th
+                  Agency{sortIndicator("name", sortField, sortDir)}
+                </th>
+                <SortTh label="Status" field={SORT_FIELDS.status} {...{ sortField, sortDir, handleSort }} className="min-w-[150px]" />
+                <SortTh label="Suggested €/listing" field={SORT_FIELDS.suggested} {...{ sortField, sortDir, handleSort }} className="min-w-[110px]" />
+                <SortTh label="Est. monthly €" field={SORT_FIELDS.monthly} {...{ sortField, sortDir, handleSort }} className="min-w-[120px]" />
+                <SortTh label="First contacted" field={SORT_FIELDS.firstContacted} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
+                <SortTh label="Trial start" field={SORT_FIELDS.trialStart} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
+                <SortTh label="Trial end" field={SORT_FIELDS.trialEnd} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
+                <SortTh label="Days left" field={SORT_FIELDS.daysLeft} {...{ sortField, sortDir, handleSort }} className="min-w-[90px]" />
+                <SortTh label="Discount offered" field={SORT_FIELDS.discountOffered} {...{ sortField, sortDir, handleSort }} className="min-w-[200px]" />
+                <SortTh
+                  label="Discount %"
+                  field={SORT_FIELDS.discountPercent}
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  handleSort={handleSort}
                   className="min-w-[90px]"
                   title="Permanent % off the bulk price for this agency, e.g. 30 for a 30% discount. Applies automatically to Suggested €/listing and Est. monthly € above."
-                >
-                  Discount %
-                </Th>
-                <Th className="min-w-[130px]">Last follow-up</Th>
-                <Th className="min-w-[70px]">#</Th>
-                <Th className="min-w-[140px]">Next follow-up</Th>
-                <Th className="min-w-[220px]">What they know</Th>
-                <Th className="min-w-[220px]">Still need / objections</Th>
-                <Th className="min-w-[200px]">Notes</Th>
+                />
+                <SortTh label="Last follow-up" field={SORT_FIELDS.lastFollowup} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
+                <SortTh label="#" field={SORT_FIELDS.followupCount} {...{ sortField, sortDir, handleSort }} className="min-w-[70px]" />
+                <SortTh
+                  label="Next follow-up"
+                  field={SORT_FIELDS.nextFollowup}
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  handleSort={handleSort}
+                  className="min-w-[140px]"
+                  title="Set this yourself - it's no longer calculated automatically."
+                />
+                <SortTh label="What they know" field={SORT_FIELDS.whatTheyKnow} {...{ sortField, sortDir, handleSort }} className="min-w-[220px]" />
+                <SortTh label="Still need / objections" field={SORT_FIELDS.stillNeed} {...{ sortField, sortDir, handleSort }} className="min-w-[220px]" />
+                <SortTh label="Notes" field={SORT_FIELDS.notes} {...{ sortField, sortDir, handleSort }} className="min-w-[200px]" />
                 <Th className="min-w-[100px]"></Th>
               </tr>
             </thead>
@@ -196,13 +305,17 @@ export default function AgencyTable() {
                     </Td>
                     <Td>
                       <span
-                        className={`inline-block w-full rounded ${STATUS_COLORS[r.status] || ""}`}
+                        className="inline-block w-full rounded"
+                        style={{
+                          backgroundColor: r.status_color || "#6b7280",
+                          color: contrastTextColor(r.status_color),
+                        }}
                       >
                         <EditableCell
                           type="select"
-                          options={STATUS_OPTIONS}
-                          value={r.status}
-                          onSave={(v) => patch(r.id, "status", v)}
+                          options={statusOptions}
+                          value={r.status_id}
+                          onSave={(v) => patch(r.id, "status_id", v)}
                         />
                       </span>
                     </Td>
@@ -248,9 +361,14 @@ export default function AgencyTable() {
                     </Td>
                     <Computed>{formatDate(r.last_followup_date)}</Computed>
                     <Computed>{r.followup_count}</Computed>
-                    <Computed className={overdue ? "bg-rose-900/50 text-rose-200 font-medium rounded px-1" : ""}>
-                      {formatDate(r.next_followup_suggested)}
-                    </Computed>
+                    <Td className={overdue ? "bg-rose-900/50 rounded" : ""}>
+                      <EditableCell
+                        type="date"
+                        value={r.next_followup_date}
+                        onSave={(v) => patch(r.id, "next_followup_date", v)}
+                        className={overdue ? "text-rose-200 font-medium" : ""}
+                      />
+                    </Td>
                     <Td>
                       <EditableCell
                         value={r.what_they_know}
@@ -312,7 +430,36 @@ export default function AgencyTable() {
           onSaved={load}
         />
       )}
+
+      {statusModalOpen && (
+        <StatusManagerModal
+          statuses={statuses}
+          onClose={() => setStatusModalOpen(false)}
+          onChanged={async () => {
+            await loadStatuses();
+            await load();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function sortIndicator(field, sortField, sortDir) {
+  if (sortField !== field) return "";
+  return sortDir === "asc" ? " ▲" : " ▼";
+}
+
+function SortTh({ label, field, sortField, sortDir, handleSort, className = "", title }) {
+  return (
+    <th
+      className={`px-2 py-2 font-medium whitespace-nowrap cursor-pointer select-none hover:text-white ${className}`}
+      onClick={() => handleSort(field)}
+      title={title || `Click to sort by ${label}`}
+    >
+      {label}
+      {sortIndicator(field, sortField, sortDir)}
+    </th>
   );
 }
 
