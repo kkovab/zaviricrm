@@ -16,6 +16,7 @@ import {
 // actions column) aren't sortable.
 const SORT_FIELDS = {
   status: "status_sort_order",
+  phone: "phone",
   suggested: "suggested_price_per_listing",
   monthly: "est_monthly_value",
   firstContacted: "date_first_contacted",
@@ -252,6 +253,7 @@ export default function AgencyTable() {
                   Agency{sortIndicator("name", sortField, sortDir)}
                 </th>
                 <SortTh label="Status" field={SORT_FIELDS.status} {...{ sortField, sortDir, handleSort }} className="min-w-[150px]" />
+                <SortTh label="Phone" field={SORT_FIELDS.phone} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
                 <SortTh label="Suggested €/listing" field={SORT_FIELDS.suggested} {...{ sortField, sortDir, handleSort }} className="min-w-[110px]" />
                 <SortTh label="Est. monthly €" field={SORT_FIELDS.monthly} {...{ sortField, sortDir, handleSort }} className="min-w-[120px]" />
                 <SortTh label="First contacted" field={SORT_FIELDS.firstContacted} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
@@ -308,6 +310,13 @@ export default function AgencyTable() {
                         options={statusOptions}
                         value={r.status_id}
                         onSave={(v) => patch(r.id, "status_id", v)}
+                      />
+                    </Td>
+                    <Td>
+                      <EditableCell
+                        value={r.phone}
+                        placeholder="Phone"
+                        onSave={(v) => patch(r.id, "phone", v)}
                       />
                     </Td>
                     <Computed>€{r.suggested_price_per_listing}</Computed>
