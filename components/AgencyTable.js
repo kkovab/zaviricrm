@@ -28,8 +28,6 @@ const SORT_FIELDS = {
   lastFollowup: "last_followup_date",
   followupCount: "followup_count",
   nextFollowup: "next_followup_date",
-  whatTheyKnow: "what_they_know",
-  stillNeed: "what_they_still_need",
   notes: "notes",
 };
 
@@ -281,8 +279,6 @@ export default function AgencyTable() {
                   className="min-w-[140px]"
                   title="Set this yourself - it's no longer calculated automatically."
                 />
-                <SortTh label="What they know" field={SORT_FIELDS.whatTheyKnow} {...{ sortField, sortDir, handleSort }} className="min-w-[220px]" />
-                <SortTh label="Still need / objections" field={SORT_FIELDS.stillNeed} {...{ sortField, sortDir, handleSort }} className="min-w-[220px]" />
                 <SortTh label="Notes" field={SORT_FIELDS.notes} {...{ sortField, sortDir, handleSort }} className="min-w-[200px]" />
                 <Th className="min-w-[100px]"></Th>
               </tr>
@@ -370,18 +366,6 @@ export default function AgencyTable() {
                       />
                     </Td>
                     <Td>
-                      <EditableCell
-                        value={r.what_they_know}
-                        onSave={(v) => patch(r.id, "what_they_know", v)}
-                      />
-                    </Td>
-                    <Td>
-                      <EditableCell
-                        value={r.what_they_still_need}
-                        onSave={(v) => patch(r.id, "what_they_still_need", v)}
-                      />
-                    </Td>
-                    <Td>
                       <EditableCell value={r.notes} onSave={(v) => patch(r.id, "notes", v)} />
                     </Td>
                     <Td>
@@ -405,7 +389,7 @@ export default function AgencyTable() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={17} className="text-center text-neutral-600 text-sm py-10">
+                  <td colSpan={15} className="text-center text-neutral-600 text-sm py-10">
                     No agencies match.
                   </td>
                 </tr>
