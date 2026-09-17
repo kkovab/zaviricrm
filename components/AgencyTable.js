@@ -279,7 +279,7 @@ export default function AgencyTable() {
                   className="min-w-[140px]"
                   title="Set this yourself - it's no longer calculated automatically."
                 />
-                <SortTh label="Notes" field={SORT_FIELDS.notes} {...{ sortField, sortDir, handleSort }} className="min-w-[200px]" />
+                <SortTh label="Notes" field={SORT_FIELDS.notes} {...{ sortField, sortDir, handleSort }} className="min-w-[260px]" />
                 <Th className="min-w-[100px]"></Th>
               </tr>
             </thead>
@@ -370,6 +370,7 @@ export default function AgencyTable() {
                         value={r.notes}
                         onSave={(v) => patch(r.id, "notes", v)}
                         clampable
+                        className="w-[260px]"
                       />
                     </Td>
                     <Td>
