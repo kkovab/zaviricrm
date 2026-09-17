@@ -45,7 +45,11 @@ export default function AgencyTable() {
     if (!res.ok) {
       // Roll back by refetching if the save failed.
       load();
-    } else if (field === "active_listings" || field === "trial_start_date") {
+    } else if (
+      field === "active_listings" ||
+      field === "trial_start_date" ||
+      field === "discount_percent"
+    ) {
       // These affect computed columns (price tier, trial end date) - refresh
       // that row's derived values from the server.
       load();
@@ -158,6 +162,12 @@ export default function AgencyTable() {
                 <Th className="min-w-[130px]">Trial end</Th>
                 <Th className="min-w-[90px]">Days left</Th>
                 <Th className="min-w-[200px]">Discount offered</Th>
+                <Th
+                  className="min-w-[90px]"
+                  title="Permanent % off the bulk price for this agency, e.g. 30 for a 30% discount. Applies automatically to Suggested €/listing and Est. monthly € above."
+                >
+                  Discount %
+                </Th>
                 <Th className="min-w-[130px]">Last follow-up</Th>
                 <Th className="min-w-[70px]">#</Th>
                 <Th className="min-w-[140px]">Next follow-up</Th>
@@ -228,6 +238,14 @@ export default function AgencyTable() {
                         onSave={(v) => patch(r.id, "discount_offered", v)}
                       />
                     </Td>
+                    <Td>
+                      <EditableCell
+                        type="number"
+                        value={r.discount_percent}
+                        placeholder="0"
+                        onSave={(v) => patch(r.id, "discount_percent", v === null ? 0 : Number(v))}
+                      />
+                    </Td>
                     <Computed>{formatDate(r.last_followup_date)}</Computed>
                     <Computed>{r.followup_count}</Computed>
                     <Computed className={overdue ? "bg-rose-900/50 text-rose-200 font-medium rounded px-1" : ""}>
@@ -269,7 +287,7 @@ export default function AgencyTable() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={16} className="text-center text-neutral-600 text-sm py-10">
+                  <td colSpan={17} className="text-center text-neutral-600 text-sm py-10">
                     No agencies match.
                   </td>
                 </tr>

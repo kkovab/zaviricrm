@@ -30,9 +30,13 @@ create table if not exists agencies (
   updated_at timestamptz not null default now()
 );
 
--- If you already ran an earlier version of this file, this line adds the
--- new column without touching your existing data. Safe to run again.
+-- If you already ran an earlier version of this file, these lines add new
+-- columns without touching your existing data. Safe to run again.
 alter table agencies add column if not exists contact_person text;
+-- Permanent per-agency discount off the bulk pricing tiers below, as a whole
+-- number percent (e.g. 30 means 30% off). Separate from discount_offered,
+-- which stays as a free-text note about what was offered/why.
+alter table agencies add column if not exists discount_percent numeric default 0;
 
 create table if not exists followups (
   id uuid primary key default gen_random_uuid(),
@@ -66,28 +70,47 @@ create trigger trg_agencies_updated_at
 -- trial end date, days left, last follow-up date, follow-up count, and the
 -- suggested next follow-up date. The app reads from this view so nothing
 -- needs to be recalculated by hand.
+--
+-- Pricing: zaviri.hr only sells the "Plus" package, minimum 10 listings per
+-- package. An agency buying fewer than 10 (i.e. not buying a package at all)
+-- pays full retail with no bulk discount. On top of the bulk tier, each
+-- agency can also carry its own permanent discount_percent (e.g. Queen Stela
+-- gets 30% off everything below) - that's applied after the tier price.
 create or replace view agency_overview as
-select
-  a.*,
-  case
-    when a.active_listings >= 25 then 13
-    when a.active_listings >= 10 then 15
-    else 20
-  end as suggested_price_per_listing,
-  a.active_listings * (
+with base as (
+  select
+    a.*,
     case
-      when a.active_listings >= 25 then 13
-      when a.active_listings >= 10 then 15
+      when a.active_listings >= 1000 then 7.49
+      when a.active_listings >= 500 then 8.49
+      when a.active_listings >= 250 then 9.49
+      when a.active_listings >= 100 then 10.49
+      when a.active_listings >= 50 then 11.99
+      when a.active_listings >= 25 then 13.49
+      when a.active_listings >= 10 then 14.99
       else 20
-    end
+    end as base_price_per_listing
+  from agencies a
+)
+select
+  b.id, b.name, b.contact_person, b.phone, b.mobile_alt, b.email, b.location,
+  b.active_listings, b.qualified, b.oglasnik_profil, b.website, b.status,
+  b.date_first_contacted, b.trial_start_date, b.discount_offered,
+  b.discount_percent, b.what_they_know, b.what_they_still_need, b.notes,
+  b.created_at, b.updated_at,
+  round(b.base_price_per_listing * (1 - coalesce(b.discount_percent, 0) / 100.0), 2)
+    as suggested_price_per_listing,
+  round(
+    b.active_listings * b.base_price_per_listing * (1 - coalesce(b.discount_percent, 0) / 100.0),
+    2
   ) as est_monthly_value,
   case
-    when a.trial_start_date is not null then a.trial_start_date + interval '30 days'
+    when b.trial_start_date is not null then b.trial_start_date + interval '30 days'
     else null
   end::date as trial_end_date,
   case
-    when a.trial_start_date is not null
-      then (a.trial_start_date + interval '30 days')::date - current_date
+    when b.trial_start_date is not null
+      then (b.trial_start_date + interval '30 days')::date - current_date
     else null
   end as days_left_in_trial,
   f.last_followup_date,
@@ -96,12 +119,12 @@ select
     when f.last_followup_date is not null then f.last_followup_date + interval '7 days'
     else null
   end::date as next_followup_suggested
-from agencies a
+from base b
 left join (
   select agency_id, max(date) as last_followup_date, count(*) as followup_count
   from followups
   group by agency_id
-) f on f.agency_id = a.id;
+) f on f.agency_id = b.id;
 
 -- Row Level Security: locked down by default. The app's server-side API routes
 -- use the service_role key, which bypasses RLS, so the app keeps working.
