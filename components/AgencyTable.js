@@ -341,7 +341,7 @@ export default function AgencyTable() {
                     key={r.id}
                     className="border-b border-neutral-900 hover:bg-neutral-900/40"
                   >
-                    <Td className="sticky left-0 z-20 bg-neutral-950 hover:bg-neutral-900/40 w-16 min-w-[64px] max-w-[64px] text-center">
+                    <Td className="sticky left-0 z-20 bg-neutral-950 w-16 min-w-[64px] max-w-[64px] text-center">
                       <EditableCell
                         type="number"
                         value={r.active_listings}
@@ -350,7 +350,7 @@ export default function AgencyTable() {
                         cellId={`${r.id}:active_listings`}
                       />
                     </Td>
-                    <Td className="sticky left-16 z-20 bg-neutral-950 hover:bg-neutral-900/40 font-medium border-r border-neutral-600">
+                    <Td className="sticky left-16 z-20 bg-neutral-950 font-medium shadow-[inset_-1px_0_0_0_#525252]">
                       <button
                         onClick={() => setInfoAgency(r)}
                         className="text-left text-white hover:text-neutral-300 hover:underline truncate block w-full px-1 py-0.5"
