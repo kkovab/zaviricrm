@@ -5,6 +5,7 @@ import EditableCell from "./EditableCell";
 import FollowupDrawer from "./FollowupDrawer";
 import AgencyInfoModal from "./AgencyInfoModal";
 import StatusManagerModal from "./StatusManagerModal";
+import TicketsModal from "./TicketsModal";
 import PresenceProvider from "./PresenceProvider";
 import { supabaseClient } from "@/lib/supabaseClient";
 import {
@@ -45,12 +46,15 @@ export default function AgencyTable() {
   const [drawerAgency, setDrawerAgency] = useState(null);
   const [infoAgency, setInfoAgency] = useState(null);
   const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [ticketsModalOpen, setTicketsModalOpen] = useState(false);
+  const [openTicketsCount, setOpenTicketsCount] = useState(0);
   const [addingName, setAddingName] = useState("");
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     load();
     loadStatuses();
+    loadTicketsCount();
   }, []);
 
   // Live sync with whoever else has this open. Supabase notifies us the
@@ -106,6 +110,12 @@ export default function AgencyTable() {
     const res = await fetch("/api/statuses");
     const json = await res.json();
     setStatuses(json.data || []);
+  }
+
+  async function loadTicketsCount() {
+    const res = await fetch("/api/tickets");
+    const json = await res.json();
+    setOpenTicketsCount((json.data || []).filter((t) => !t.done).length);
   }
 
   // Multi-field version - used by the follow-up drawer to set the date and
@@ -377,7 +387,8 @@ export default function AgencyTable() {
           <div>
             <h1 className="text-lg font-semibold text-white">Agency Outreach</h1>
             <p className="text-xs text-neutral-500">
-              {rows.length} agencies · {dueCount} follow-up{dueCount === 1 ? "" : "s"} due
+              {rows.length} agencies · {dueCount} follow-up{dueCount === 1 ? "" : "s"} due ·{" "}
+              {openTicketsCount} open ticket{openTicketsCount === 1 ? "" : "s"}
             </p>
           </div>
         </div>
@@ -424,6 +435,12 @@ export default function AgencyTable() {
             className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-300 hover:border-neutral-600"
           >
             Manage Statuses
+          </button>
+          <button
+            onClick={() => setTicketsModalOpen(true)}
+            className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-300 hover:border-neutral-600"
+          >
+            Tickets{openTicketsCount > 0 ? ` (${openTicketsCount})` : ""}
           </button>
           <form onSubmit={addAgency} className="flex items-center gap-2">
             <input
@@ -554,6 +571,14 @@ export default function AgencyTable() {
             await loadStatuses();
             await load();
           }}
+        />
+      )}
+
+      {ticketsModalOpen && (
+        <TicketsModal
+          agencies={rows}
+          onClose={() => setTicketsModalOpen(false)}
+          onChanged={loadTicketsCount}
         />
       )}
     </div>

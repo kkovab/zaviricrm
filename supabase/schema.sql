@@ -108,6 +108,27 @@ create table if not exists followups (
 
 create index if not exists idx_followups_agency_id on followups(agency_id);
 
+-- General-purpose per-agency to-do list, separate from the Follow Up flow
+-- above. A follow-up is about *when do I next talk to this agency and what
+-- do I say*; a ticket is a one-off action item ("pull her ads", "send
+-- confirmation email") that isn't inherently about scheduling a
+-- conversation. due_date is optional - plenty of tickets are just "do this
+-- whenever, no deadline". Done tickets stick around (never auto-deleted) so
+-- you can always restore one you completed by mistake.
+create table if not exists tickets (
+  id uuid primary key default gen_random_uuid(),
+  agency_id uuid not null references agencies(id) on delete cascade,
+  title text not null,
+  type text,
+  due_date date,
+  done boolean not null default false,
+  completed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_tickets_agency_id on tickets(agency_id);
+create index if not exists idx_tickets_done on tickets(done);
+
 -- Keep updated_at current on every edit
 create or replace function set_updated_at()
 returns trigger as $$
@@ -200,3 +221,4 @@ left join (
 alter table agencies enable row level security;
 alter table followups enable row level security;
 alter table statuses enable row level security;
+alter table tickets enable row level security;
