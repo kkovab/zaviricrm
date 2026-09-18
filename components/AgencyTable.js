@@ -10,6 +10,7 @@ import PresenceProvider from "./PresenceProvider";
 import { supabaseClient } from "@/lib/supabaseClient";
 import {
   isFollowupOverdue,
+  hasScheduledFollowup,
   compareByPriority,
   formatDate,
 } from "@/lib/constants";
@@ -180,7 +181,7 @@ export default function AgencyTable() {
   const filtered = useMemo(() => {
     const result = rows.filter((r) => {
       if (search && !r.name.toLowerCase().includes(search.toLowerCase())) return false;
-      if (onlyDue && !isFollowupOverdue(r)) return false;
+      if (onlyDue && !hasScheduledFollowup(r)) return false;
       if (statusFilter && r.status_id !== statusFilter) return false;
       return true;
     });
@@ -419,8 +420,9 @@ export default function AgencyTable() {
                 ? "bg-rose-700/80 border-rose-600 text-white"
                 : "bg-neutral-900 border-neutral-700 text-neutral-300 hover:border-neutral-600"
             }`}
+            title="Shows every agency with a next follow-up set - overdue or still upcoming"
           >
-            Due follow-ups only
+            Has a follow-up scheduled
           </button>
           {sortField && (
             <button
