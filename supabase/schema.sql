@@ -71,6 +71,10 @@ alter table agencies add column if not exists next_followup_date date;
 -- table. Replaces the old approach of using a dedicated "Follow Up" status
 -- for this.
 alter table agencies add column if not exists needs_followup boolean not null default false;
+-- Free-text note that goes with the upcoming follow-up date above - set
+-- together with next_followup_date from the Follow-ups drawer's "Set next
+-- follow-up" tab.
+alter table agencies add column if not exists next_followup_note text;
 
 -- If your agencies table still has the old free-text "status" column (from
 -- before custom statuses existed), move its values over to status_id and
@@ -160,7 +164,7 @@ select
   coalesce(s.color, '#6b7280') as status_color,
   coalesce(s.is_closed, false) as status_is_closed,
   coalesce(s.sort_order, 0) as status_sort_order,
-  b.date_first_contacted, b.trial_start_date, b.next_followup_date,
+  b.date_first_contacted, b.trial_start_date, b.next_followup_date, b.next_followup_note,
   b.discount_offered,
   b.discount_percent, b.what_they_know, b.what_they_still_need, b.notes,
   b.created_at, b.updated_at,

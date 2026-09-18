@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useState } from "react";
 import EditableCell from "./EditableCell";
 import FollowupDrawer from "./FollowupDrawer";
 import AgencyInfoModal from "./AgencyInfoModal";
 import StatusManagerModal from "./StatusManagerModal";
-import SetNextFollowupModal from "./SetNextFollowupModal";
 import PresenceProvider from "./PresenceProvider";
 import { supabaseClient } from "@/lib/supabaseClient";
 import {
@@ -45,7 +43,6 @@ export default function AgencyTable() {
   const [sortField, setSortField] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
   const [drawerAgency, setDrawerAgency] = useState(null);
-  const [nextFollowupAgency, setNextFollowupAgency] = useState(null);
   const [infoAgency, setInfoAgency] = useState(null);
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [addingName, setAddingName] = useState("");
@@ -111,27 +108,30 @@ export default function AgencyTable() {
     setStatuses(json.data || []);
   }
 
-  async function patch(id, field, value) {
+  // Multi-field version - used by the follow-up drawer to set the date and
+  // note together in one request. patch() below is the single-field case
+  // everything else in the grid uses.
+  async function patchFields(id, fields) {
     // Optimistic update so the grid feels instant.
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...fields } : r)));
     const res = await fetch(`/api/agencies/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [field]: value }),
+      body: JSON.stringify(fields),
     });
+    const affectsComputed = ["active_listings", "trial_start_date", "discount_percent", "status_id"];
     if (!res.ok) {
       // Roll back by refetching if the save failed.
       load();
-    } else if (
-      field === "active_listings" ||
-      field === "trial_start_date" ||
-      field === "discount_percent" ||
-      field === "status_id"
-    ) {
+    } else if (Object.keys(fields).some((f) => affectsComputed.includes(f))) {
       // These affect computed columns (price tier, trial end date, status
       // color/closed-flag/sort order) - refresh derived values from the server.
       load();
     }
+  }
+
+  async function patch(id, field, value) {
+    return patchFields(id, { [field]: value });
   }
 
   async function addAgency(e) {
@@ -334,7 +334,7 @@ export default function AgencyTable() {
             className={`min-h-[28px] px-1 py-0.5 text-sm ${
               overdue ? "text-rose-200 font-medium" : "text-neutral-300"
             }`}
-            title="Set via the Follow-ups button's “Set next follow-up” option"
+            title={r.next_followup_note || "Set via the Follow-ups button's “Set next follow-up” option"}
           >
             {formatDate(r.next_followup_date) || <span className="text-neutral-600">—</span>}
           </div>
@@ -350,10 +350,12 @@ export default function AgencyTable() {
         </Td>
         <Td>
           <div className="flex items-center gap-2">
-            <FollowupActionsMenu
-              onLog={() => setDrawerAgency(r)}
-              onSetNext={() => setNextFollowupAgency(r)}
-            />
+            <button
+              onClick={() => setDrawerAgency(r)}
+              className="text-xs text-[#f01546] hover:text-[#f2426a]"
+            >
+              Follow-ups
+            </button>
             <button
               onClick={() => removeAgency(r.id)}
               className="text-xs text-neutral-600 hover:text-rose-400"
@@ -530,17 +532,9 @@ export default function AgencyTable() {
           agency={drawerAgency}
           onClose={() => setDrawerAgency(null)}
           onLogged={load}
-        />
-      )}
-
-      {nextFollowupAgency && (
-        <SetNextFollowupModal
-          agency={nextFollowupAgency}
-          onClose={() => setNextFollowupAgency(null)}
-          onSave={async (date) => {
-            await patch(nextFollowupAgency.id, "next_followup_date", date);
-            setNextFollowupAgency(null);
-          }}
+          onSetNext={(date, note) =>
+            patchFields(drawerAgency.id, { next_followup_date: date, next_followup_note: note })
+          }
         />
       )}
 
@@ -602,96 +596,5 @@ function Computed({ children, className = "" }) {
     <td className={`px-2 py-1 align-top text-sm text-neutral-400 ${className}`}>
       <div className="min-h-[28px] px-1 py-0.5">{children}</div>
     </td>
-  );
-}
-
-// The "Follow-ups" button, but with two choices behind it instead of jumping
-// straight into the log drawer: log something that already happened, or set
-// when the next one should be. Rendered into a portal so the floating menu
-// always draws on top of the table instead of getting clipped by its
-// horizontal-scroll container - same approach as the status ColorDropdown.
-function FollowupActionsMenu({ onLog, onSetNext }) {
-  const [open, setOpen] = useState(false);
-  const [rect, setRect] = useState(null);
-  const btnRef = useRef(null);
-  const panelRef = useRef(null);
-
-  function toggle() {
-    if (!open && btnRef.current) setRect(btnRef.current.getBoundingClientRect());
-    setOpen((v) => !v);
-  }
-
-  useEffect(() => {
-    if (!open) return;
-
-    function reposition() {
-      if (btnRef.current) setRect(btnRef.current.getBoundingClientRect());
-    }
-    function onDocMouseDown(e) {
-      if (panelRef.current?.contains(e.target) || btnRef.current?.contains(e.target)) return;
-      setOpen(false);
-    }
-    function onKeyDown(e) {
-      if (e.key === "Escape") setOpen(false);
-    }
-
-    window.addEventListener("scroll", reposition, true);
-    window.addEventListener("resize", reposition);
-    document.addEventListener("mousedown", onDocMouseDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("scroll", reposition, true);
-      window.removeEventListener("resize", reposition);
-      document.removeEventListener("mousedown", onDocMouseDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
-
-  return (
-    <>
-      <button
-        type="button"
-        ref={btnRef}
-        onClick={toggle}
-        className="text-xs text-[#f01546] hover:text-[#f2426a]"
-      >
-        Follow-ups
-      </button>
-
-      {open &&
-        rect &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            ref={panelRef}
-            className="fixed z-[1000] flex flex-col gap-1 p-1.5 rounded-xl shadow-2xl ring-1 ring-black/40 bg-neutral-900 w-44"
-            style={{ top: rect.bottom + 4, left: Math.max(8, rect.right - 176) }}
-          >
-            <button
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                setOpen(false);
-                onLog();
-              }}
-              className="px-3 py-2 text-sm text-left rounded-lg text-neutral-200 hover:bg-neutral-800"
-            >
-              Log a follow-up
-            </button>
-            <button
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                setOpen(false);
-                onSetNext();
-              }}
-              className="px-3 py-2 text-sm text-left rounded-lg text-neutral-200 hover:bg-neutral-800"
-            >
-              Set next follow-up
-            </button>
-          </div>,
-          document.body
-        )}
-    </>
   );
 }

@@ -19,6 +19,7 @@ const EDITABLE_FIELDS = [
   "date_first_contacted",
   "trial_start_date",
   "next_followup_date",
+  "next_followup_note",
   "discount_offered",
   "discount_percent",
   "what_they_know",
