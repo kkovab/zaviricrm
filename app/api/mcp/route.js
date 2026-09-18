@@ -74,7 +74,7 @@ const TOOLS = [
   {
     name: "update_agency_contact",
     description:
-      "Save contact info you found for an agency back into the CRM. Only touches contact fields (contact_person, phone, mobile_alt, email, website, oglasnik_profil) - never status, notes, or anything else. Provide the agency's id (from list_agencies or get_agency) and only the fields you want to set.",
+      "Save contact info you found for an agency back into the CRM. Only touches contact fields (contact_person, phone, mobile_alt, email, website, oglasnik_profil) plus an optional note - never status or anything else. Provide the agency's id (from list_agencies or get_agency) and the fields you want to set. If note is given, it's appended to the agency's existing notes, tagged as coming from Claude, so it's clear later which contacts were added this way.",
     inputSchema: {
       type: "object",
       properties: {
@@ -85,6 +85,11 @@ const TOOLS = [
         email: { type: "string" },
         website: { type: "string" },
         oglasnik_profil: { type: "string" },
+        note: {
+          type: "string",
+          description:
+            "Optional short note to append to this agency's notes field (e.g. what was found and where). Gets prefixed with 'Added from Claude' and a date automatically.",
+        },
       },
       required: ["id"],
     },
@@ -148,25 +153,39 @@ async function getAgency({ id, name } = {}) {
   return data || [];
 }
 
-async function updateAgencyContact({ id, ...fields } = {}) {
+async function updateAgencyContact({ id, note, ...fields } = {}) {
   if (!id) throw new Error("id is required.");
 
   const update = {};
   for (const key of CONTACT_FIELDS) {
     if (key in fields && fields[key] !== undefined) update[key] = fields[key];
   }
-  if (Object.keys(update).length === 0) {
+  const hasNote = typeof note === "string" && note.trim().length > 0;
+  if (Object.keys(update).length === 0 && !hasNote) {
     throw new Error(
-      `Provide at least one contact field to update (${CONTACT_FIELDS.join(", ")}).`
+      `Provide at least one contact field to update (${CONTACT_FIELDS.join(", ")}), or a note.`
     );
   }
 
   const supabase = supabaseServer();
+
+  if (hasNote) {
+    const { data: existing, error: fetchError } = await supabase
+      .from("agencies")
+      .select("notes")
+      .eq("id", id)
+      .single();
+    if (fetchError) throw new Error(fetchError.message);
+    const stamp = new Date().toISOString().slice(0, 10);
+    const line = `Added from Claude (${stamp}): ${note.trim()}`;
+    update.notes = existing?.notes ? `${existing.notes}\n${line}` : line;
+  }
+
   const { data, error } = await supabase
     .from("agencies")
     .update(update)
     .eq("id", id)
-    .select(AGENCY_CONTACT_FIELDS)
+    .select(`${AGENCY_CONTACT_FIELDS}, notes`)
     .single();
   if (error) throw new Error(error.message);
   return data;
