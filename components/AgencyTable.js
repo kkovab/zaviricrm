@@ -358,7 +358,7 @@ export default function AgencyTable() {
           />
         </Td>
         <Td>
-          <div className="flex flex-col items-start gap-1.5">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setDrawerAgency(r)}
               className="text-xs font-medium text-white bg-[#f01546] hover:bg-[#f2426a] px-2.5 py-1 rounded-md transition whitespace-nowrap"
@@ -367,7 +367,7 @@ export default function AgencyTable() {
             </button>
             <button
               onClick={() => removeAgency(r.id)}
-              className="text-xs font-medium text-neutral-400 hover:text-rose-300 border border-neutral-700 hover:border-rose-900 px-2.5 py-1 rounded-md transition"
+              className="text-xs font-medium text-neutral-400 hover:text-rose-300 border border-neutral-700 hover:border-rose-900 px-2.5 py-1 rounded-md transition whitespace-nowrap"
             >
               Delete
             </button>
@@ -515,7 +515,7 @@ export default function AgencyTable() {
                 />
                 <SortTh label="#" field={SORT_FIELDS.followupCount} {...{ sortField, sortDir, handleSort }} className="min-w-[70px]" />
                 <SortTh label="Notes" field={SORT_FIELDS.notes} {...{ sortField, sortDir, handleSort }} className="min-w-[260px]" />
-                <Th className="min-w-[110px]"></Th>
+                <Th className="min-w-[180px]"></Th>
               </tr>
             </thead>
             <tbody>
