@@ -197,18 +197,12 @@ export default function AgencyTable() {
     });
   }, [rows, search, onlyDue, statusFilter, sortField, sortDir]);
 
-  // Agencies currently sitting in "Follow Up" get pulled into their own
-  // section at the top of the table (still in whatever order `filtered`
-  // already put them in) so they're impossible to miss. If nobody's in that
-  // status right now, the section just doesn't render at all.
-  const followUpRows = useMemo(
-    () => filtered.filter((r) => (r.status || "").trim().toLowerCase() === "follow up"),
-    [filtered]
-  );
-  const otherRows = useMemo(
-    () => filtered.filter((r) => (r.status || "").trim().toLowerCase() !== "follow up"),
-    [filtered]
-  );
+  // Agencies you've manually starred (independent of status - any status can
+  // be starred) get pulled into their own "Follow Up" section at the top of
+  // the table, still in whatever order `filtered` already put them in. If
+  // nobody's starred right now, the section just doesn't render at all.
+  const followUpRows = useMemo(() => filtered.filter((r) => r.needs_followup), [filtered]);
+  const otherRows = useMemo(() => filtered.filter((r) => !r.needs_followup), [filtered]);
 
   const dueCount = useMemo(() => rows.filter(isFollowupOverdue).length, [rows]);
 
@@ -233,13 +227,29 @@ export default function AgencyTable() {
           />
         </Td>
         <Td className="sticky left-16 z-20 bg-neutral-950 font-medium shadow-[inset_-1px_0_0_0_#525252]">
-          <button
-            onClick={() => setInfoAgency(r)}
-            className="text-left text-white hover:text-neutral-300 hover:underline truncate block w-full px-1 py-0.5"
-            title="Click to view/edit contact info"
-          >
-            {r.name}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => patch(r.id, "needs_followup", !r.needs_followup)}
+              className={`shrink-0 text-base leading-none px-0.5 ${
+                r.needs_followup ? "text-yellow-400" : "text-neutral-700 hover:text-neutral-400"
+              }`}
+              title={
+                r.needs_followup
+                  ? "Marked for follow-up - click to remove from the Follow Up section"
+                  : "Click to mark for follow-up"
+              }
+            >
+              ★
+            </button>
+            <button
+              onClick={() => setInfoAgency(r)}
+              className="text-left text-white hover:text-neutral-300 hover:underline truncate block w-full px-1 py-0.5"
+              title="Click to view/edit contact info"
+            >
+              {r.name}
+            </button>
+          </div>
         </Td>
         <Td>
           <EditableCell

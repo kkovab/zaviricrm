@@ -65,6 +65,12 @@ alter table agencies add column if not exists status_id uuid references statuses
 -- Next follow-up is now something you set yourself, not auto-calculated
 -- from the last logged follow-up + 7 days.
 alter table agencies add column if not exists next_followup_date date;
+-- Manual "needs follow-up" flag (the star icon next to the agency name in
+-- the app). Independent of status entirely - any agency, in any status, can
+-- be starred to pull it into the "Follow Up" section at the top of the
+-- table. Replaces the old approach of using a dedicated "Follow Up" status
+-- for this.
+alter table agencies add column if not exists needs_followup boolean not null default false;
 
 -- If your agencies table still has the old free-text "status" column (from
 -- before custom statuses existed), move its values over to status_id and
@@ -148,7 +154,7 @@ with base as (
 )
 select
   b.id, b.name, b.contact_person, b.phone, b.mobile_alt, b.email, b.location,
-  b.active_listings, b.qualified, b.oglasnik_profil, b.website,
+  b.active_listings, b.qualified, b.oglasnik_profil, b.website, b.needs_followup,
   s.id as status_id,
   coalesce(s.name, 'Not Contacted') as status,
   coalesce(s.color, '#6b7280') as status_color,

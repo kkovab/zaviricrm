@@ -12,6 +12,7 @@ const EDITABLE_FIELDS = [
   "location",
   "active_listings",
   "qualified",
+  "needs_followup",
   "oglasnik_profil",
   "website",
   "status_id",
