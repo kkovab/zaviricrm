@@ -338,8 +338,6 @@ export default function AgencyTable() {
             cellId={`${r.id}:discount_percent`}
           />
         </Td>
-        <Computed>{formatDate(r.last_followup_date)}</Computed>
-        <Computed>{r.followup_count}</Computed>
         <Td className={overdue ? "bg-rose-900/50 rounded" : ""}>
           <div
             className={`min-h-[28px] px-1 py-0.5 text-sm ${
@@ -350,6 +348,8 @@ export default function AgencyTable() {
             {formatDate(r.next_followup_date) || <span className="text-neutral-600">—</span>}
           </div>
         </Td>
+        <Computed>{r.followup_count}</Computed>
+        <Computed>{formatDate(r.last_followup_date)}</Computed>
         <Td>
           <EditableCell
             value={r.notes}
@@ -501,8 +501,6 @@ export default function AgencyTable() {
                   className="min-w-[90px]"
                   title="Permanent % off the bulk price for this agency, e.g. 30 for a 30% discount. Applies automatically to Suggested €/listing and Est. monthly € above."
                 />
-                <SortTh label="Last follow-up" field={SORT_FIELDS.lastFollowup} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
-                <SortTh label="#" field={SORT_FIELDS.followupCount} {...{ sortField, sortDir, handleSort }} className="min-w-[70px]" />
                 <SortTh
                   label="Next follow-up"
                   field={SORT_FIELDS.nextFollowup}
@@ -512,6 +510,8 @@ export default function AgencyTable() {
                   className="min-w-[140px]"
                   title="Set via each agency's Follow-ups button - “Set next follow-up” option."
                 />
+                <SortTh label="#" field={SORT_FIELDS.followupCount} {...{ sortField, sortDir, handleSort }} className="min-w-[70px]" />
+                <SortTh label="Last follow-up" field={SORT_FIELDS.lastFollowup} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
                 <SortTh label="Notes" field={SORT_FIELDS.notes} {...{ sortField, sortDir, handleSort }} className="min-w-[260px]" />
                 <Th className="min-w-[100px]"></Th>
               </tr>
