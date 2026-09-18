@@ -440,9 +440,14 @@ export default function AgencyTable() {
           </button>
           <button
             onClick={() => setTicketsModalOpen(true)}
-            className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-300 hover:border-neutral-600"
+            className="relative text-sm px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-300 hover:border-neutral-600"
           >
-            Tickets{openTicketsCount > 0 ? ` (${openTicketsCount})` : ""}
+            Tickets
+            {openTicketsCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-[#f01546] text-white text-[11px] font-semibold leading-none">
+                {openTicketsCount}
+              </span>
+            )}
           </button>
           <form onSubmit={addAgency} className="flex items-center gap-2">
             <input
