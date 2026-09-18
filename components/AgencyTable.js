@@ -229,9 +229,16 @@ export default function AgencyTable() {
         <Td className="sticky left-16 z-20 bg-neutral-950 font-medium shadow-[inset_-1px_0_0_0_#525252]">
           <div className="flex items-center gap-1">
             <button
+              onClick={() => setInfoAgency(r)}
+              className="text-left text-white hover:text-neutral-300 hover:underline truncate flex-1 min-w-0 px-1 py-0.5"
+              title="Click to view/edit contact info"
+            >
+              {r.name}
+            </button>
+            <button
               type="button"
               onClick={() => patch(r.id, "needs_followup", !r.needs_followup)}
-              className={`shrink-0 text-base leading-none px-0.5 ${
+              className={`shrink-0 px-0.5 ${
                 r.needs_followup ? "text-yellow-400" : "text-neutral-700 hover:text-neutral-400"
               }`}
               title={
@@ -240,14 +247,13 @@ export default function AgencyTable() {
                   : "Click to mark for follow-up"
               }
             >
-              ★
-            </button>
-            <button
-              onClick={() => setInfoAgency(r)}
-              className="text-left text-white hover:text-neutral-300 hover:underline truncate block w-full px-1 py-0.5"
-              title="Click to view/edit contact info"
-            >
-              {r.name}
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 1v14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <path
+                  d="M3 2.2h8.2c.7 0 1.1.85.6 1.35L9.3 6l2.5 2.45c.5.5.1 1.35-.6 1.35H3V2.2z"
+                  fill="currentColor"
+                />
+              </svg>
             </button>
           </div>
         </Td>
