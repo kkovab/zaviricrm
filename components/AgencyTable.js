@@ -29,7 +29,6 @@ const SORT_FIELDS = {
   trialEnd: "trial_end_date",
   daysLeft: "days_left_in_trial",
   discountPercent: "discount_percent",
-  lastFollowup: "last_followup_date",
   followupCount: "followup_count",
   nextFollowup: "next_followup_date",
   notes: "notes",
@@ -349,7 +348,6 @@ export default function AgencyTable() {
           </div>
         </Td>
         <Computed>{r.followup_count}</Computed>
-        <Computed>{formatDate(r.last_followup_date)}</Computed>
         <Td>
           <EditableCell
             value={r.notes}
@@ -516,7 +514,6 @@ export default function AgencyTable() {
                   title="Set via each agency's Follow-ups button - “Set next follow-up” option."
                 />
                 <SortTh label="#" field={SORT_FIELDS.followupCount} {...{ sortField, sortDir, handleSort }} className="min-w-[70px]" />
-                <SortTh label="Last follow-up" field={SORT_FIELDS.lastFollowup} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
                 <SortTh label="Notes" field={SORT_FIELDS.notes} {...{ sortField, sortDir, handleSort }} className="min-w-[260px]" />
                 <Th className="min-w-[100px]"></Th>
               </tr>
@@ -526,7 +523,7 @@ export default function AgencyTable() {
                 <>
                   <tr aria-hidden="true">
                     <td
-                      colSpan={15}
+                      colSpan={14}
                       className="bg-neutral-900/80 text-[11px] font-semibold uppercase tracking-wider text-[#f2426a] px-3 py-1.5 border-t border-b border-neutral-800"
                     >
                       Follow Up
@@ -534,14 +531,14 @@ export default function AgencyTable() {
                   </tr>
                   {followUpRows.map(renderRow)}
                   <tr aria-hidden="true">
-                    <td colSpan={15} className="p-0 h-3 bg-neutral-950 border-b-4 border-neutral-800"></td>
+                    <td colSpan={14} className="p-0 h-3 bg-neutral-950 border-b-4 border-neutral-800"></td>
                   </tr>
                 </>
               )}
               {otherRows.map(renderRow)}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={15} className="text-center text-neutral-600 text-sm py-10">
+                  <td colSpan={14} className="text-center text-neutral-600 text-sm py-10">
                     No agencies match.
                   </td>
                 </tr>
