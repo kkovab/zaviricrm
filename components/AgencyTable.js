@@ -11,6 +11,7 @@ import { supabaseClient } from "@/lib/supabaseClient";
 import {
   isFollowupOverdue,
   hasScheduledFollowup,
+  isFollowupToday,
   compareByPriority,
   formatDate,
 } from "@/lib/constants";
@@ -48,6 +49,10 @@ export default function AgencyTable() {
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [ticketsModalOpen, setTicketsModalOpen] = useState(false);
   const [openTicketsCount, setOpenTicketsCount] = useState(0);
+  const todayFollowupCount = useMemo(
+    () => rows.filter(isFollowupToday).length,
+    [rows]
+  );
   const [addingName, setAddingName] = useState("");
   const [adding, setAdding] = useState(false);
 
@@ -413,7 +418,7 @@ export default function AgencyTable() {
           </select>
           <button
             onClick={() => setOnlyDue((v) => !v)}
-            className={`text-sm px-3 py-1.5 rounded-lg border transition ${
+            className={`relative text-sm px-3 py-1.5 rounded-lg border transition ${
               onlyDue
                 ? "bg-rose-700/80 border-rose-600 text-white"
                 : "bg-neutral-900 border-neutral-700 text-neutral-300 hover:border-neutral-600"
@@ -421,6 +426,11 @@ export default function AgencyTable() {
             title="Shows every agency with a next follow-up set - overdue or still upcoming"
           >
             Has a follow-up scheduled
+            {todayFollowupCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-[#f01546] text-white text-[11px] font-semibold leading-none">
+                {todayFollowupCount}
+              </span>
+            )}
           </button>
           {sortField && (
             <button
