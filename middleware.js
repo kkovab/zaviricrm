@@ -7,10 +7,14 @@ export function middleware(request) {
 
   // Always allow the login page itself, the login API, and the logo image
   // to load - otherwise nobody could ever get in (and the login page's own
-  // logo would 404/redirect instead of rendering).
+  // logo would 404/redirect instead of rendering). The MCP endpoint is also
+  // exempt from the cookie check - it's meant to be called by an AI tool
+  // (Claude Code, Codex, etc), not a browser with a login cookie, so it
+  // checks its own bearer-token password instead (see app/api/mcp/route.js).
   if (
     pathname.startsWith("/login") ||
     pathname.startsWith("/api/login") ||
+    pathname.startsWith("/api/mcp") ||
     pathname === "/logo.webp"
   ) {
     return NextResponse.next();
