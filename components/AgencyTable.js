@@ -197,12 +197,141 @@ export default function AgencyTable() {
     });
   }, [rows, search, onlyDue, statusFilter, sortField, sortDir]);
 
+  // Agencies currently sitting in "Follow Up" get pulled into their own
+  // section at the top of the table (still in whatever order `filtered`
+  // already put them in) so they're impossible to miss. If nobody's in that
+  // status right now, the section just doesn't render at all.
+  const followUpRows = useMemo(
+    () => filtered.filter((r) => (r.status || "").trim().toLowerCase() === "follow up"),
+    [filtered]
+  );
+  const otherRows = useMemo(
+    () => filtered.filter((r) => (r.status || "").trim().toLowerCase() !== "follow up"),
+    [filtered]
+  );
+
   const dueCount = useMemo(() => rows.filter(isFollowupOverdue).length, [rows]);
 
   const statusOptions = useMemo(
     () => statuses.map((s) => ({ value: s.id, label: s.name, color: s.color })),
     [statuses]
   );
+
+  // Renders one agency's <tr>. Pulled out so both the "Follow Up" section
+  // and the regular rows below it can share the exact same row markup.
+  function renderRow(r) {
+    const overdue = isFollowupOverdue(r);
+    return (
+      <tr key={r.id} className="border-b border-neutral-900 hover:bg-neutral-900/40">
+        <Td className="sticky left-0 z-20 bg-neutral-950 w-16 min-w-[64px] max-w-[64px] text-center">
+          <EditableCell
+            type="number"
+            value={r.active_listings}
+            onSave={(v) => patch(r.id, "active_listings", v === null ? 0 : Number(v))}
+            className="text-center"
+            cellId={`${r.id}:active_listings`}
+          />
+        </Td>
+        <Td className="sticky left-16 z-20 bg-neutral-950 font-medium shadow-[inset_-1px_0_0_0_#525252]">
+          <button
+            onClick={() => setInfoAgency(r)}
+            className="text-left text-white hover:text-neutral-300 hover:underline truncate block w-full px-1 py-0.5"
+            title="Click to view/edit contact info"
+          >
+            {r.name}
+          </button>
+        </Td>
+        <Td>
+          <EditableCell
+            type="select"
+            options={statusOptions}
+            value={r.status_id}
+            onSave={(v) => patch(r.id, "status_id", v)}
+            cellId={`${r.id}:status_id`}
+          />
+        </Td>
+        <Td>
+          <EditableCell
+            value={r.phone}
+            placeholder="Phone"
+            onSave={(v) => patch(r.id, "phone", v)}
+            cellId={`${r.id}:phone`}
+          />
+        </Td>
+        <Computed>€{r.suggested_price_per_listing}</Computed>
+        <Computed>€{r.est_monthly_value}</Computed>
+        <Td>
+          <EditableCell
+            type="date"
+            value={r.date_first_contacted}
+            onSave={(v) => patch(r.id, "date_first_contacted", v)}
+            cellId={`${r.id}:date_first_contacted`}
+          />
+        </Td>
+        <Td>
+          <EditableCell
+            type="date"
+            value={r.trial_start_date}
+            onSave={(v) => patch(r.id, "trial_start_date", v)}
+            cellId={`${r.id}:trial_start_date`}
+          />
+        </Td>
+        <Computed>{formatDate(r.trial_end_date)}</Computed>
+        <Computed
+          className={
+            r.days_left_in_trial != null && r.days_left_in_trial < 0 ? "text-rose-400" : ""
+          }
+        >
+          {r.days_left_in_trial ?? ""}
+        </Computed>
+        <Td>
+          <EditableCell
+            type="number"
+            value={r.discount_percent}
+            placeholder="0"
+            onSave={(v) => patch(r.id, "discount_percent", v === null ? 0 : Number(v))}
+            cellId={`${r.id}:discount_percent`}
+          />
+        </Td>
+        <Computed>{formatDate(r.last_followup_date)}</Computed>
+        <Computed>{r.followup_count}</Computed>
+        <Td className={overdue ? "bg-rose-900/50 rounded" : ""}>
+          <EditableCell
+            type="date"
+            value={r.next_followup_date}
+            onSave={(v) => patch(r.id, "next_followup_date", v)}
+            className={overdue ? "text-rose-200 font-medium" : ""}
+            cellId={`${r.id}:next_followup_date`}
+          />
+        </Td>
+        <Td>
+          <EditableCell
+            value={r.notes}
+            onSave={(v) => patch(r.id, "notes", v)}
+            clampable
+            className="w-[260px]"
+            cellId={`${r.id}:notes`}
+          />
+        </Td>
+        <Td>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setDrawerAgency(r)}
+              className="text-xs text-[#f01546] hover:text-[#f2426a]"
+            >
+              Follow-ups
+            </button>
+            <button
+              onClick={() => removeAgency(r.id)}
+              className="text-xs text-neutral-600 hover:text-rose-400"
+            >
+              Delete
+            </button>
+          </div>
+        </Td>
+      </tr>
+    );
+  }
 
   return (
     <PresenceProvider>
@@ -334,124 +463,23 @@ export default function AgencyTable() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r) => {
-                const overdue = isFollowupOverdue(r);
-                return (
-                  <tr
-                    key={r.id}
-                    className="border-b border-neutral-900 hover:bg-neutral-900/40"
-                  >
-                    <Td className="sticky left-0 z-20 bg-neutral-950 w-16 min-w-[64px] max-w-[64px] text-center">
-                      <EditableCell
-                        type="number"
-                        value={r.active_listings}
-                        onSave={(v) => patch(r.id, "active_listings", v === null ? 0 : Number(v))}
-                        className="text-center"
-                        cellId={`${r.id}:active_listings`}
-                      />
-                    </Td>
-                    <Td className="sticky left-16 z-20 bg-neutral-950 font-medium shadow-[inset_-1px_0_0_0_#525252]">
-                      <button
-                        onClick={() => setInfoAgency(r)}
-                        className="text-left text-white hover:text-neutral-300 hover:underline truncate block w-full px-1 py-0.5"
-                        title="Click to view/edit contact info"
-                      >
-                        {r.name}
-                      </button>
-                    </Td>
-                    <Td>
-                      <EditableCell
-                        type="select"
-                        options={statusOptions}
-                        value={r.status_id}
-                        onSave={(v) => patch(r.id, "status_id", v)}
-                        cellId={`${r.id}:status_id`}
-                      />
-                    </Td>
-                    <Td>
-                      <EditableCell
-                        value={r.phone}
-                        placeholder="Phone"
-                        onSave={(v) => patch(r.id, "phone", v)}
-                        cellId={`${r.id}:phone`}
-                      />
-                    </Td>
-                    <Computed>€{r.suggested_price_per_listing}</Computed>
-                    <Computed>€{r.est_monthly_value}</Computed>
-                    <Td>
-                      <EditableCell
-                        type="date"
-                        value={r.date_first_contacted}
-                        onSave={(v) => patch(r.id, "date_first_contacted", v)}
-                        cellId={`${r.id}:date_first_contacted`}
-                      />
-                    </Td>
-                    <Td>
-                      <EditableCell
-                        type="date"
-                        value={r.trial_start_date}
-                        onSave={(v) => patch(r.id, "trial_start_date", v)}
-                        cellId={`${r.id}:trial_start_date`}
-                      />
-                    </Td>
-                    <Computed>{formatDate(r.trial_end_date)}</Computed>
-                    <Computed
-                      className={
-                        r.days_left_in_trial != null && r.days_left_in_trial < 0
-                          ? "text-rose-400"
-                          : ""
-                      }
+              {followUpRows.length > 0 && (
+                <>
+                  <tr aria-hidden="true">
+                    <td
+                      colSpan={15}
+                      className="bg-neutral-900/80 text-[11px] font-semibold uppercase tracking-wider text-[#f2426a] px-3 py-1.5 border-t border-b border-neutral-800"
                     >
-                      {r.days_left_in_trial ?? ""}
-                    </Computed>
-                    <Td>
-                      <EditableCell
-                        type="number"
-                        value={r.discount_percent}
-                        placeholder="0"
-                        onSave={(v) => patch(r.id, "discount_percent", v === null ? 0 : Number(v))}
-                        cellId={`${r.id}:discount_percent`}
-                      />
-                    </Td>
-                    <Computed>{formatDate(r.last_followup_date)}</Computed>
-                    <Computed>{r.followup_count}</Computed>
-                    <Td className={overdue ? "bg-rose-900/50 rounded" : ""}>
-                      <EditableCell
-                        type="date"
-                        value={r.next_followup_date}
-                        onSave={(v) => patch(r.id, "next_followup_date", v)}
-                        className={overdue ? "text-rose-200 font-medium" : ""}
-                        cellId={`${r.id}:next_followup_date`}
-                      />
-                    </Td>
-                    <Td>
-                      <EditableCell
-                        value={r.notes}
-                        onSave={(v) => patch(r.id, "notes", v)}
-                        clampable
-                        className="w-[260px]"
-                        cellId={`${r.id}:notes`}
-                      />
-                    </Td>
-                    <Td>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setDrawerAgency(r)}
-                          className="text-xs text-[#f01546] hover:text-[#f2426a]"
-                        >
-                          Follow-ups
-                        </button>
-                        <button
-                          onClick={() => removeAgency(r.id)}
-                          className="text-xs text-neutral-600 hover:text-rose-400"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </Td>
+                      Follow Up
+                    </td>
                   </tr>
-                );
-              })}
+                  {followUpRows.map(renderRow)}
+                  <tr aria-hidden="true">
+                    <td colSpan={15} className="p-0 h-3 bg-neutral-950 border-b-4 border-neutral-800"></td>
+                  </tr>
+                </>
+              )}
+              {otherRows.map(renderRow)}
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={15} className="text-center text-neutral-600 text-sm py-10">
