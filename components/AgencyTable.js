@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import EditableCell from "./EditableCell";
 import FollowupDrawer from "./FollowupDrawer";
 import AgencyInfoModal from "./AgencyInfoModal";
 import StatusManagerModal from "./StatusManagerModal";
+import SetNextFollowupModal from "./SetNextFollowupModal";
 import PresenceProvider from "./PresenceProvider";
 import { supabaseClient } from "@/lib/supabaseClient";
 import {
@@ -43,6 +45,7 @@ export default function AgencyTable() {
   const [sortField, setSortField] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
   const [drawerAgency, setDrawerAgency] = useState(null);
+  const [nextFollowupAgency, setNextFollowupAgency] = useState(null);
   const [infoAgency, setInfoAgency] = useState(null);
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [addingName, setAddingName] = useState("");
@@ -197,11 +200,26 @@ export default function AgencyTable() {
     });
   }, [rows, search, onlyDue, statusFilter, sortField, sortDir]);
 
-  // Agencies you've manually starred (independent of status - any status can
-  // be starred) get pulled into their own "Follow Up" section at the top of
-  // the table, still in whatever order `filtered` already put them in. If
-  // nobody's starred right now, the section just doesn't render at all.
-  const followUpRows = useMemo(() => filtered.filter((r) => r.needs_followup), [filtered]);
+  // Agencies you've flagged (independent of status - any status can be
+  // flagged) get pulled into their own "Follow Up" section at the top of the
+  // table. By default (no column sort picked) that section is ordered by
+  // soonest next follow-up date first, regardless of how the rest of the
+  // table is sorted below it - agencies with no next follow-up date set yet
+  // sink to the end of the section. Pick an explicit column sort and it
+  // applies everywhere, same as any other column. If nobody's flagged right
+  // now, the section just doesn't render at all.
+  const followUpRows = useMemo(() => {
+    const rows = filtered.filter((r) => r.needs_followup);
+    if (sortField) return rows;
+    return [...rows].sort((a, b) => {
+      const dueA = a.next_followup_date;
+      const dueB = b.next_followup_date;
+      if (dueA && dueB) return new Date(dueA) - new Date(dueB);
+      if (dueA && !dueB) return -1;
+      if (!dueA && dueB) return 1;
+      return 0;
+    });
+  }, [filtered, sortField]);
   const otherRows = useMemo(() => filtered.filter((r) => !r.needs_followup), [filtered]);
 
   const dueCount = useMemo(() => rows.filter(isFollowupOverdue).length, [rows]);
@@ -312,13 +330,14 @@ export default function AgencyTable() {
         <Computed>{formatDate(r.last_followup_date)}</Computed>
         <Computed>{r.followup_count}</Computed>
         <Td className={overdue ? "bg-rose-900/50 rounded" : ""}>
-          <EditableCell
-            type="date"
-            value={r.next_followup_date}
-            onSave={(v) => patch(r.id, "next_followup_date", v)}
-            className={overdue ? "text-rose-200 font-medium" : ""}
-            cellId={`${r.id}:next_followup_date`}
-          />
+          <div
+            className={`min-h-[28px] px-1 py-0.5 text-sm ${
+              overdue ? "text-rose-200 font-medium" : "text-neutral-300"
+            }`}
+            title="Set via the Follow-ups button's “Set next follow-up” option"
+          >
+            {formatDate(r.next_followup_date) || <span className="text-neutral-600">—</span>}
+          </div>
         </Td>
         <Td>
           <EditableCell
@@ -331,12 +350,10 @@ export default function AgencyTable() {
         </Td>
         <Td>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setDrawerAgency(r)}
-              className="text-xs text-[#f01546] hover:text-[#f2426a]"
-            >
-              Follow-ups
-            </button>
+            <FollowupActionsMenu
+              onLog={() => setDrawerAgency(r)}
+              onSetNext={() => setNextFollowupAgency(r)}
+            />
             <button
               onClick={() => removeAgency(r.id)}
               className="text-xs text-neutral-600 hover:text-rose-400"
@@ -472,7 +489,7 @@ export default function AgencyTable() {
                   sortDir={sortDir}
                   handleSort={handleSort}
                   className="min-w-[140px]"
-                  title="Set this yourself - it's no longer calculated automatically."
+                  title="Set via each agency's Follow-ups button - “Set next follow-up” option."
                 />
                 <SortTh label="Notes" field={SORT_FIELDS.notes} {...{ sortField, sortDir, handleSort }} className="min-w-[260px]" />
                 <Th className="min-w-[100px]"></Th>
@@ -513,6 +530,17 @@ export default function AgencyTable() {
           agency={drawerAgency}
           onClose={() => setDrawerAgency(null)}
           onLogged={load}
+        />
+      )}
+
+      {nextFollowupAgency && (
+        <SetNextFollowupModal
+          agency={nextFollowupAgency}
+          onClose={() => setNextFollowupAgency(null)}
+          onSave={async (date) => {
+            await patch(nextFollowupAgency.id, "next_followup_date", date);
+            setNextFollowupAgency(null);
+          }}
         />
       )}
 
@@ -574,5 +602,96 @@ function Computed({ children, className = "" }) {
     <td className={`px-2 py-1 align-top text-sm text-neutral-400 ${className}`}>
       <div className="min-h-[28px] px-1 py-0.5">{children}</div>
     </td>
+  );
+}
+
+// The "Follow-ups" button, but with two choices behind it instead of jumping
+// straight into the log drawer: log something that already happened, or set
+// when the next one should be. Rendered into a portal so the floating menu
+// always draws on top of the table instead of getting clipped by its
+// horizontal-scroll container - same approach as the status ColorDropdown.
+function FollowupActionsMenu({ onLog, onSetNext }) {
+  const [open, setOpen] = useState(false);
+  const [rect, setRect] = useState(null);
+  const btnRef = useRef(null);
+  const panelRef = useRef(null);
+
+  function toggle() {
+    if (!open && btnRef.current) setRect(btnRef.current.getBoundingClientRect());
+    setOpen((v) => !v);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+
+    function reposition() {
+      if (btnRef.current) setRect(btnRef.current.getBoundingClientRect());
+    }
+    function onDocMouseDown(e) {
+      if (panelRef.current?.contains(e.target) || btnRef.current?.contains(e.target)) return;
+      setOpen(false);
+    }
+    function onKeyDown(e) {
+      if (e.key === "Escape") setOpen(false);
+    }
+
+    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("scroll", reposition, true);
+      window.removeEventListener("resize", reposition);
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        type="button"
+        ref={btnRef}
+        onClick={toggle}
+        className="text-xs text-[#f01546] hover:text-[#f2426a]"
+      >
+        Follow-ups
+      </button>
+
+      {open &&
+        rect &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={panelRef}
+            className="fixed z-[1000] flex flex-col gap-1 p-1.5 rounded-xl shadow-2xl ring-1 ring-black/40 bg-neutral-900 w-44"
+            style={{ top: rect.bottom + 4, left: Math.max(8, rect.right - 176) }}
+          >
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setOpen(false);
+                onLog();
+              }}
+              className="px-3 py-2 text-sm text-left rounded-lg text-neutral-200 hover:bg-neutral-800"
+            >
+              Log a follow-up
+            </button>
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setOpen(false);
+                onSetNext();
+              }}
+              className="px-3 py-2 text-sm text-left rounded-lg text-neutral-200 hover:bg-neutral-800"
+            >
+              Set next follow-up
+            </button>
+          </div>,
+          document.body
+        )}
+    </>
   );
 }
