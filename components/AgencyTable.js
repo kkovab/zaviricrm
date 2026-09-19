@@ -25,7 +25,6 @@ const SORT_FIELDS = {
   phone: "phone",
   suggested: "suggested_price_per_listing",
   monthly: "est_monthly_value",
-  firstContacted: "date_first_contacted",
   trialStart: "trial_start_date",
   trialEnd: "trial_end_date",
   daysLeft: "days_left_in_trial",
@@ -312,14 +311,6 @@ export default function AgencyTable() {
         <Td>
           <EditableCell
             type="date"
-            value={r.date_first_contacted}
-            onSave={(v) => patch(r.id, "date_first_contacted", v)}
-            cellId={`${r.id}:date_first_contacted`}
-          />
-        </Td>
-        <Td>
-          <EditableCell
-            type="date"
             value={r.trial_start_date}
             onSave={(v) => patch(r.id, "trial_start_date", v)}
             cellId={`${r.id}:trial_start_date`}
@@ -501,7 +492,6 @@ export default function AgencyTable() {
                 <SortTh label="Phone" field={SORT_FIELDS.phone} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
                 <SortTh label="Suggested €/listing" field={SORT_FIELDS.suggested} {...{ sortField, sortDir, handleSort }} className="min-w-[110px]" />
                 <SortTh label="Est. monthly €" field={SORT_FIELDS.monthly} {...{ sortField, sortDir, handleSort }} className="min-w-[120px]" />
-                <SortTh label="First contacted" field={SORT_FIELDS.firstContacted} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
                 <SortTh label="Trial start" field={SORT_FIELDS.trialStart} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
                 <SortTh label="Trial end" field={SORT_FIELDS.trialEnd} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
                 <SortTh label="Days left" field={SORT_FIELDS.daysLeft} {...{ sortField, sortDir, handleSort }} className="min-w-[90px]" />
@@ -533,7 +523,7 @@ export default function AgencyTable() {
                 <>
                   <tr aria-hidden="true">
                     <td
-                      colSpan={14}
+                      colSpan={13}
                       className="bg-neutral-900/80 text-[11px] font-semibold uppercase tracking-wider text-[#f2426a] px-3 py-1.5 border-t border-b border-neutral-800"
                     >
                       Follow Up
@@ -541,14 +531,14 @@ export default function AgencyTable() {
                   </tr>
                   {followUpRows.map(renderRow)}
                   <tr aria-hidden="true">
-                    <td colSpan={14} className="p-0 h-3 bg-neutral-950 border-b-4 border-neutral-800"></td>
+                    <td colSpan={13} className="p-0 h-3 bg-neutral-950 border-b-4 border-neutral-800"></td>
                   </tr>
                 </>
               )}
               {otherRows.map(renderRow)}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={14} className="text-center text-neutral-600 text-sm py-10">
+                  <td colSpan={13} className="text-center text-neutral-600 text-sm py-10">
                     No agencies match.
                   </td>
                 </tr>
