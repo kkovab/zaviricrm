@@ -120,11 +120,17 @@ create table if not exists tickets (
   agency_id uuid not null references agencies(id) on delete cascade,
   title text not null,
   type text,
+  tags text[] not null default '{}',
+  details text,
   due_date date,
   done boolean not null default false,
   completed_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+-- Ticket fields added after the first version of the CRM was deployed.
+alter table tickets add column if not exists tags text[] not null default '{}';
+alter table tickets add column if not exists details text;
 
 create index if not exists idx_tickets_agency_id on tickets(agency_id);
 create index if not exists idx_tickets_done on tickets(done);

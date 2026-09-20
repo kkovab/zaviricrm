@@ -18,7 +18,9 @@ export async function POST(request) {
   const res = NextResponse.json({ ok: true });
   res.cookies.set("zaviri_auth", expected, {
     httpOnly: true,
-    secure: true,
+    // localhost uses HTTP during development; secure cookies are only sent
+    // over HTTPS and would otherwise make a successful login appear stuck.
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 30, // 30 days

@@ -5,7 +5,7 @@ import EditableCell from "./EditableCell";
 import FollowupDrawer from "./FollowupDrawer";
 import AgencyInfoModal from "./AgencyInfoModal";
 import StatusManagerModal from "./StatusManagerModal";
-import TicketsModal from "./TicketsModal";
+import TicketsBoard from "./TicketsBoard";
 import PresenceProvider from "./PresenceProvider";
 import { supabaseClient } from "@/lib/supabaseClient";
 import {
@@ -46,7 +46,7 @@ export default function AgencyTable() {
   const [drawerAgency, setDrawerAgency] = useState(null);
   const [infoAgency, setInfoAgency] = useState(null);
   const [statusModalOpen, setStatusModalOpen] = useState(false);
-  const [ticketsModalOpen, setTicketsModalOpen] = useState(false);
+  const [ticketsView, setTicketsView] = useState(false);
   const [openTicketsCount, setOpenTicketsCount] = useState(0);
   const todayFollowupCount = useMemo(
     () => rows.filter(isFollowupToday).length,
@@ -373,6 +373,16 @@ export default function AgencyTable() {
     );
   }
 
+  if (ticketsView) {
+    return (
+      <TicketsBoard
+        agencies={rows}
+        onBack={() => setTicketsView(false)}
+        onChanged={loadTicketsCount}
+      />
+    );
+  }
+
   return (
     <PresenceProvider>
     <div className="h-screen flex flex-col bg-neutral-950">
@@ -385,6 +395,22 @@ export default function AgencyTable() {
               {rows.length} agencies · {dueCount} follow-up{dueCount === 1 ? "" : "s"} due ·{" "}
               {openTicketsCount} open ticket{openTicketsCount === 1 ? "" : "s"}
             </p>
+          </div>
+          <div className="hidden sm:flex items-center rounded-lg border border-neutral-800 bg-neutral-900 p-1 ml-2">
+            <button className="rounded-md bg-neutral-700 px-3 py-1.5 text-sm font-medium text-white">
+              Agencies
+            </button>
+            <button
+              onClick={() => setTicketsView(true)}
+              className="relative rounded-md px-3 py-1.5 text-sm text-neutral-400 hover:text-white"
+            >
+              Tickets
+              {openTicketsCount > 0 && (
+                <span className="ml-1.5 rounded-full bg-[#f01546] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                  {openTicketsCount}
+                </span>
+              )}
+            </button>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -438,15 +464,10 @@ export default function AgencyTable() {
             Manage Statuses
           </button>
           <button
-            onClick={() => setTicketsModalOpen(true)}
-            className="relative text-sm px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-300 hover:border-neutral-600"
+            onClick={() => setTicketsView(true)}
+            className="sm:hidden relative text-sm px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-300"
           >
-            Tickets
-            {openTicketsCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-[#f01546] text-white text-[11px] font-semibold leading-none">
-                {openTicketsCount}
-              </span>
-            )}
+            Tickets {openTicketsCount > 0 ? `(${openTicketsCount})` : ""}
           </button>
           <form onSubmit={addAgency} className="flex items-center gap-2">
             <input
@@ -578,13 +599,6 @@ export default function AgencyTable() {
         />
       )}
 
-      {ticketsModalOpen && (
-        <TicketsModal
-          agencies={rows}
-          onClose={() => setTicketsModalOpen(false)}
-          onChanged={loadTicketsCount}
-        />
-      )}
     </div>
     </PresenceProvider>
   );
