@@ -90,10 +90,10 @@ export default function StatusManagerModal({ statuses, onClose, onChanged }) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-xl shadow-2xl max-h-[85vh] overflow-y-auto"
+        className="modal-surface w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-neutral-900 border-b border-neutral-800 px-5 py-4 flex items-center justify-between">
+        <div className="modal-header sticky top-0 bg-neutral-900 border-b border-neutral-800 px-5 py-4 flex items-center justify-between">
           <h2 className="font-semibold text-white">Manage Statuses</h2>
           <button onClick={onClose} className="text-neutral-400 hover:text-white text-sm">
             Close

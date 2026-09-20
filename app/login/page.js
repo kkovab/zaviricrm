@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default function LoginPage() {
   return (
@@ -38,27 +39,31 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-neutral-950 px-4">
+    <div className="app-shell relative min-h-screen flex items-center justify-center bg-neutral-950 px-4">
+      <div className="absolute right-5 top-5">
+        <ThemeToggle compact />
+      </div>
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm bg-neutral-900 border border-neutral-800 rounded-xl p-8 shadow-xl"
+        className="modal-surface w-full max-w-sm bg-neutral-900 border border-neutral-800 rounded-2xl p-7 shadow-xl"
       >
-        <img src="/logo.webp" alt="Logo" className="h-12 w-12 rounded mx-auto mb-4" />
-        <h1 className="text-xl font-semibold text-white mb-1 text-center">Zaviri Outreach</h1>
-        <p className="text-sm text-neutral-400 mb-6 text-center">Enter the shared password to continue.</p>
+        <img src="/logo.webp" alt="Zaviri" className="brand-mark h-11 w-11 mx-auto mb-5" />
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#f2426a] mb-2 text-center">Workspace access</p>
+        <h1 className="workspace-title text-xl font-semibold text-white mb-1 text-center">Zaviri Outreach</h1>
+        <p className="workspace-subtitle text-sm text-neutral-400 mb-6 text-center">Sign in to continue to the agency workspace.</p>
         <input
           type="password"
           autoFocus
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
-          className="w-full rounded-lg bg-neutral-800 border border-neutral-700 px-3 py-2 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-[#f01546] mb-3"
+          className="control-field w-full min-h-[42px] mb-3"
         />
         {error && <p className="text-rose-400 text-sm mb-3">{error}</p>}
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-lg bg-[#f01546] hover:bg-[#f2426a] disabled:opacity-50 text-white font-medium py-2 transition"
+          className="primary-button w-full min-h-[42px]"
         >
           {loading ? "Checking..." : "Enter"}
         </button>

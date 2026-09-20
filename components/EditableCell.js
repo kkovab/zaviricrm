@@ -3,30 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { contrastTextColor } from "@/lib/constants";
-import { usePresence } from "./PresenceProvider";
-
-/**
- * A small stack of colored dots pinned to a cell's top-left corner, one per
- * other person currently on that same cell. Purely presentational - the
- * caller decides who counts as "on this cell."
- */
-function PresenceBadge({ people }) {
-  if (!people || people.length === 0) return null;
-  return (
-    <div
-      className="absolute -top-1.5 -left-1.5 z-10 flex pointer-events-none"
-      title={people.map((p) => p.name).join(", ")}
-    >
-      {people.slice(0, 3).map((p, i) => (
-        <span
-          key={i}
-          className="w-2.5 h-2.5 rounded-full ring-2 ring-neutral-950"
-          style={{ backgroundColor: p.color, marginLeft: i > 0 ? -5 : 0 }}
-        />
-      ))}
-    </div>
-  );
-}
 
 /**
  * A cell that looks like plain text until clicked, then turns into an
@@ -47,18 +23,12 @@ export default function EditableCell({
   // count, so a short line of wide characters and a long line of narrow
   // ones are both judged correctly.
   clampable = false,
-  // A stable id like `${agencyId}:phone` identifying this exact cell. When
-  // given, whoever else has this same cell open (editing or, for the
-  // status dropdown, open) shows up as a little colored dot in the corner.
-  cellId = null,
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? "");
   const [expanded, setExpanded] = useState(false);
   const [isOverflowing, setIsOverflowing] = useState(false);
   const textRef = useRef(null);
-  const presence = usePresence();
-  const others = presence?.othersOnCell(cellId) || [];
 
   useEffect(() => {
     setDraft(value ?? "");
@@ -77,13 +47,11 @@ export default function EditableCell({
 
   function startEditing() {
     setEditing(true);
-    presence?.setActiveCell(cellId);
   }
 
   function commit() {
     setEditing(false);
     setExpanded(false);
-    presence?.setActiveCell(null);
     if (draft !== (value ?? "")) {
       onSave(draft === "" ? null : draft);
     }
@@ -93,7 +61,6 @@ export default function EditableCell({
     setDraft(value ?? "");
     setEditing(false);
     setExpanded(false);
-    presence?.setActiveCell(null);
   }
 
   if (type === "select") {
@@ -110,12 +77,11 @@ export default function EditableCell({
     // colored options we render our own dropdown instead, which we fully
     // control and can guarantee shows color.
     if (opts.some((opt) => opt.color)) {
-      return <ColorDropdown options={opts} value={value} onChange={onSave} cellId={cellId} />;
+      return <ColorDropdown options={opts} value={value} onChange={onSave} />;
     }
 
     return (
-      <div className="relative">
-        <PresenceBadge people={others} />
+      <div>
         <select
           value={value ?? ""}
           onChange={(e) => onSave(e.target.value)}
@@ -133,8 +99,7 @@ export default function EditableCell({
 
   if (type === "checkbox") {
     return (
-      <div className="relative inline-block">
-        <PresenceBadge people={others} />
+      <div className="inline-block">
         <input
           type="checkbox"
           checked={!!value}
@@ -150,8 +115,7 @@ export default function EditableCell({
     const showWrapped = clampable && expanded;
 
     return (
-      <div className="relative">
-        <PresenceBadge people={others} />
+      <div>
         <div
           ref={clampable ? textRef : undefined}
           onClick={() => {
@@ -173,8 +137,7 @@ export default function EditableCell({
   }
 
   return (
-    <div className="relative">
-      <PresenceBadge people={others} />
+    <div>
       <input
         autoFocus
         type={type}
@@ -199,14 +162,12 @@ export default function EditableCell({
  * it always draws on top of the table instead of getting clipped by the
  * table's horizontal-scroll container.
  */
-function ColorDropdown({ options, value, onChange, cellId }) {
+function ColorDropdown({ options, value, onChange }) {
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState(null);
   const [hoverValue, setHoverValue] = useState(null);
   const btnRef = useRef(null);
   const panelRef = useRef(null);
-  const presence = usePresence();
-  const others = presence?.othersOnCell(cellId) || [];
 
   const selected = options.find((o) => o.value === value) || null;
   const fallbackColor = "#52525b";
@@ -214,9 +175,6 @@ function ColorDropdown({ options, value, onChange, cellId }) {
   function toggle() {
     if (!open && btnRef.current) {
       setRect(btnRef.current.getBoundingClientRect());
-      presence?.setActiveCell(cellId);
-    } else if (open) {
-      presence?.setActiveCell(null);
     }
     setOpen((v) => !v);
   }
@@ -230,12 +188,10 @@ function ColorDropdown({ options, value, onChange, cellId }) {
     function onDocMouseDown(e) {
       if (panelRef.current?.contains(e.target) || btnRef.current?.contains(e.target)) return;
       setOpen(false);
-      presence?.setActiveCell(null);
     }
     function onKeyDown(e) {
       if (e.key === "Escape") {
         setOpen(false);
-        presence?.setActiveCell(null);
       }
     }
 
@@ -254,7 +210,6 @@ function ColorDropdown({ options, value, onChange, cellId }) {
 
   return (
     <div className="relative">
-      <PresenceBadge people={others} />
       <button
         type="button"
         ref={btnRef}
@@ -288,7 +243,6 @@ function ColorDropdown({ options, value, onChange, cellId }) {
                     e.preventDefault();
                     onChange(opt.value);
                     setOpen(false);
-                    presence?.setActiveCell(null);
                   }}
                   onMouseEnter={() => setHoverValue(opt.value)}
                   onMouseLeave={() => setHoverValue(null)}

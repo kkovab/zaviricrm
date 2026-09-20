@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 
-// Only the date and the description ("discussed") can be edited from the
-// History list in the Follow-ups drawer - method/outcome/next_step aren't
-// exposed there any more, so they're left alone.
-const EDITABLE_FIELDS = ["date", "discussed"];
+// A contact log can be corrected after it is saved. Outcome remains legacy
+// data; status lives on the agency itself and is updated through the contact
+// composer rather than per history item.
+const EDITABLE_FIELDS = ["date", "method", "discussed", "next_step"];
 
 export async function PATCH(request, { params }) {
   const { id } = await params;
@@ -33,4 +33,15 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ data });
+}
+
+export async function DELETE(request, { params }) {
+  const { id } = await params;
+  const supabase = supabaseServer();
+  const { error } = await supabase.from("followups").delete().eq("id", id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true });
 }

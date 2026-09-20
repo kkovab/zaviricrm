@@ -1,19 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { forwardRef, startTransition, useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import EditableCell from "./EditableCell";
 import FollowupDrawer from "./FollowupDrawer";
 import AgencyInfoModal from "./AgencyInfoModal";
 import StatusManagerModal from "./StatusManagerModal";
 import TicketsBoard from "./TicketsBoard";
-import PresenceProvider from "./PresenceProvider";
+import PhonesModal, { agencyPhones } from "./PhonesModal";
+import AgencyNotesModal from "./AgencyNotesModal";
+import WorkspaceHeader from "./WorkspaceHeader";
 import { supabaseClient } from "@/lib/supabaseClient";
 import {
   isFollowupOverdue,
-  hasScheduledFollowup,
-  isFollowupToday,
+  isFollowupWithinNextDays,
   compareByPriority,
   formatDate,
+  formatEuro,
+  followupRelativeLabel,
+  withAgencyCalculations,
 } from "@/lib/constants";
 
 // Which row field each column header sorts by when clicked. Columns left out
@@ -23,42 +27,57 @@ const SORT_FIELDS = {
   activeListings: "active_listings",
   status: "status_sort_order",
   phone: "phone",
-  suggested: "suggested_price_per_listing",
+  package: "package_capacity",
+  pricePerListing: "price_per_listing",
   monthly: "est_monthly_value",
   trialStart: "trial_start_date",
   trialEnd: "trial_end_date",
-  daysLeft: "days_left_in_trial",
-  discountPercent: "discount_percent",
-  followupCount: "followup_count",
   nextFollowup: "next_followup_date",
   notes: "notes",
 };
+
+const ROWS_PER_BATCH = 50;
+const SUGGESTED_PRICING_COOKIE = "zaviri_show_suggested_pricing";
+
+function readCookie(name) {
+  if (typeof document === "undefined") return null;
+  const prefix = `${name}=`;
+  const cookie = document.cookie.split("; ").find((item) => item.startsWith(prefix));
+  return cookie ? cookie.slice(prefix.length) : null;
+}
 
 export default function AgencyTable() {
   const [rows, setRows] = useState([]);
   const [statuses, setStatuses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
-  const [onlyDue, setOnlyDue] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
   const [sortField, setSortField] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
-  const [drawerAgency, setDrawerAgency] = useState(null);
+  const [visibleCount, setVisibleCount] = useState(ROWS_PER_BATCH);
+  const [showSuggestedPricing, setShowSuggestedPricing] = useState(true);
   const [infoAgency, setInfoAgency] = useState(null);
-  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [phonesAgency, setPhonesAgency] = useState(null);
+  const [notesAgency, setNotesAgency] = useState(null);
   const [ticketsView, setTicketsView] = useState(false);
   const [openTicketsCount, setOpenTicketsCount] = useState(0);
-  const todayFollowupCount = useMemo(
-    () => rows.filter(isFollowupToday).length,
-    [rows]
-  );
-  const [addingName, setAddingName] = useState("");
-  const [adding, setAdding] = useState(false);
+  const followupDrawerHostRef = useRef(null);
+  const addAgencyHostRef = useRef(null);
+  const statusManagerHostRef = useRef(null);
+  const tableFrameRef = useRef(null);
+  const loadMoreRef = useRef(null);
+  const deferredSearch = useDeferredValue(search);
 
   useEffect(() => {
     load();
     loadStatuses();
     loadTicketsCount();
+  }, []);
+
+  useEffect(() => {
+    const savedPreference = readCookie(SUGGESTED_PRICING_COOKIE);
+    if (savedPreference !== null) setShowSuggestedPricing(savedPreference === "1");
   }, []);
 
   // Live sync with whoever else has this open. Supabase notifies us the
@@ -93,6 +112,14 @@ export default function AgencyTable() {
           statusTimer = setTimeout(loadStatuses, 400);
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "agency_notes" },
+        () => {
+          clearTimeout(reloadTimer);
+          reloadTimer = setTimeout(() => load({ silent: true }), 400);
+        }
+      )
       .subscribe();
 
     return () => {
@@ -103,37 +130,56 @@ export default function AgencyTable() {
   }, []);
 
   async function load({ silent = false } = {}) {
-    if (!silent) setLoading(true);
-    const res = await fetch("/api/agencies");
-    const json = await res.json();
-    setRows(json.data || []);
-    if (!silent) setLoading(false);
+    if (!silent) {
+      setLoading(true);
+      setLoadError("");
+    }
+    try {
+      const res = await fetch("/api/agencies");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Couldn't load agencies.");
+      setRows((json.data || []).map(withAgencyCalculations));
+    } catch (error) {
+      setLoadError(error.message || "Couldn't load agencies.");
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }
 
   async function loadStatuses() {
-    const res = await fetch("/api/statuses");
-    const json = await res.json();
-    setStatuses(json.data || []);
+    try {
+      const res = await fetch("/api/statuses");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Couldn't load statuses.");
+      setStatuses(json.data || []);
+    } catch (error) {
+      setLoadError((current) => current || error.message || "Couldn't load statuses.");
+    }
   }
 
   async function loadTicketsCount() {
-    const res = await fetch("/api/tickets");
-    const json = await res.json();
-    setOpenTicketsCount((json.data || []).filter((t) => !t.done).length);
+    try {
+      const res = await fetch("/api/tickets");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Couldn't load tickets.");
+      setOpenTicketsCount((json.data || []).filter((t) => !t.done).length);
+    } catch (error) {
+      setLoadError((current) => current || error.message || "Couldn't load tickets.");
+    }
   }
 
   // Multi-field version - used by the follow-up drawer to set the date and
   // note together in one request. patch() below is the single-field case
   // everything else in the grid uses.
-  async function patchFields(id, fields) {
+  const patchFields = useCallback(async (id, fields) => {
     // Optimistic update so the grid feels instant.
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...fields } : r)));
+    setRows((prev) => prev.map((r) => (r.id === id ? withAgencyCalculations({ ...r, ...fields }) : r)));
     const res = await fetch(`/api/agencies/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(fields),
     });
-    const affectsComputed = ["active_listings", "trial_start_date", "discount_percent", "status_id"];
+    const affectsComputed = ["status_id"];
     if (!res.ok) {
       // Roll back by refetching if the save failed.
       load();
@@ -142,52 +188,74 @@ export default function AgencyTable() {
       // color/closed-flag/sort order) - refresh derived values from the server.
       load();
     }
-  }
+  }, []);
 
-  async function patch(id, field, value) {
+  const patch = useCallback((id, field, value) => {
     return patchFields(id, { [field]: value });
-  }
+  }, [patchFields]);
 
-  async function addAgency(e) {
-    e.preventDefault();
-    if (!addingName.trim()) return;
-    setAdding(true);
-    const res = await fetch("/api/agencies", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: addingName.trim() }),
-    });
-    setAdding(false);
-    if (res.ok) {
-      setAddingName("");
-      load();
-    }
-  }
-
-  async function removeAgency(id) {
+  const removeAgency = useCallback(async (id) => {
     if (!confirm("Delete this agency and all its logged follow-ups? This can't be undone.")) {
-      return;
+      return false;
     }
     setRows((prev) => prev.filter((r) => r.id !== id));
-    await fetch(`/api/agencies/${id}`, { method: "DELETE" });
+    const response = await fetch(`/api/agencies/${id}`, { method: "DELETE" });
+    if (!response.ok) {
+      load();
+      return false;
+    }
+    return true;
+  }, []);
+
+  const openFollowups = useCallback((agency, initialMode = "log") => {
+    followupDrawerHostRef.current?.open(agency, initialMode);
+  }, []);
+
+  async function savePhones(agencyId, phoneNumbers) {
+    await patchFields(agencyId, {
+      phone_numbers: phoneNumbers,
+      phone: phoneNumbers[0] || null,
+      mobile_alt: phoneNumbers[1] || null,
+    });
+    setPhonesAgency(null);
+  }
+
+  function toggleSuggestedPricing() {
+    const nextValue = !showSuggestedPricing;
+    setShowSuggestedPricing(nextValue);
+    document.cookie = `${SUGGESTED_PRICING_COOKIE}=${nextValue ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+
+    if (!nextValue && [SORT_FIELDS.package, SORT_FIELDS.pricePerListing, SORT_FIELDS.monthly].includes(sortField)) {
+      setSortField(null);
+      setSortDir("asc");
+      setVisibleCount(ROWS_PER_BATCH);
+    }
   }
 
   function handleSort(field) {
-    if (sortField === field) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortField(field);
-      setSortDir("asc");
-    }
+    setVisibleCount(ROWS_PER_BATCH);
+    startTransition(() => {
+      if (sortField === field) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      } else {
+        setSortField(field);
+        setSortDir("asc");
+      }
+    });
   }
 
-  const filtered = useMemo(() => {
-    const result = rows.filter((r) => {
-      if (search && !r.name.toLowerCase().includes(search.toLowerCase())) return false;
-      if (onlyDue && !hasScheduledFollowup(r)) return false;
+  // Keep matching separate from table sorting. The Follow Up queue must not
+  // gain or lose rows when a user changes a regular table sort.
+  const matchingRows = useMemo(() => {
+    return rows.filter((r) => {
+      if (deferredSearch && !r.name.toLowerCase().includes(deferredSearch.toLowerCase())) return false;
       if (statusFilter && r.status_id !== statusFilter) return false;
       return true;
     });
+  }, [rows, deferredSearch, statusFilter]);
+
+  const filtered = useMemo(() => {
+    const result = [...matchingRows];
 
     if (!sortField) {
       return result.sort(compareByPriority);
@@ -212,20 +280,15 @@ export default function AgencyTable() {
       }
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [rows, search, onlyDue, statusFilter, sortField, sortDir]);
+  }, [matchingRows, sortField, sortDir]);
 
-  // Agencies you've flagged (independent of status - any status can be
-  // flagged) get pulled into their own "Follow Up" section at the top of the
-  // table. By default (no column sort picked) that section is ordered by
-  // soonest next follow-up date first, regardless of how the rest of the
-  // table is sorted below it - agencies with no next follow-up date set yet
-  // sink to the end of the section. Pick an explicit column sort and it
-  // applies everywhere, same as any other column. If nobody's flagged right
-  // now, the section just doesn't render at all.
+  // Overdue agencies and agencies scheduled within the next 30 days are
+  // pulled into their own "Follow Up" section at the top of the table. By
+  // section is always ordered by soonest next follow-up date first. It is
+  // intentionally independent from the sort selected for the regular table.
   const followUpRows = useMemo(() => {
-    const rows = filtered.filter((r) => r.needs_followup);
-    if (sortField) return rows;
-    return [...rows].sort((a, b) => {
+    const upcomingRows = matchingRows.filter(isFollowupWithinNextDays);
+    return [...upcomingRows].sort((a, b) => {
       const dueA = a.next_followup_date;
       const dueB = b.next_followup_date;
       if (dueA && dueB) return new Date(dueA) - new Date(dueB);
@@ -233,8 +296,28 @@ export default function AgencyTable() {
       if (!dueA && dueB) return 1;
       return 0;
     });
-  }, [filtered, sortField]);
-  const otherRows = useMemo(() => filtered.filter((r) => !r.needs_followup), [filtered]);
+  }, [matchingRows]);
+  const otherRows = useMemo(() => filtered.filter((r) => !isFollowupWithinNextDays(r)), [filtered]);
+  // Keep the priority queue fully visible, while rendering the rest in
+  // small batches. This avoids hundreds of editable DOM cells updating on
+  // every sort, filter, or realtime refresh.
+  const visibleRows = useMemo(() => otherRows.slice(0, visibleCount), [otherRows, visibleCount]);
+  const hasMoreRows = visibleRows.length < otherRows.length;
+
+  useEffect(() => {
+    if (!hasMoreRows || !loadMoreRef.current || !tableFrameRef.current) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisibleCount((current) => Math.min(current + ROWS_PER_BATCH, otherRows.length));
+        }
+      },
+      { root: tableFrameRef.current, rootMargin: "320px 0px" }
+    );
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [hasMoreRows, otherRows.length]);
 
   const dueCount = useMemo(() => rows.filter(isFollowupOverdue).length, [rows]);
 
@@ -245,49 +328,27 @@ export default function AgencyTable() {
 
   // Renders one agency's <tr>. Pulled out so both the "Follow Up" section
   // and the regular rows below it can share the exact same row markup.
-  function renderRow(r) {
+  function renderRow(r, rowClassName = "") {
     const overdue = isFollowupOverdue(r);
+    const followupBadge = followupRelativeLabel(r.next_followup_date);
     return (
-      <tr key={r.id} className="border-b border-neutral-900 hover:bg-neutral-900/40">
+      <tr key={r.id} className={`agency-grid__row border-b border-neutral-900 ${rowClassName}`}>
         <Td className="sticky left-0 z-20 bg-neutral-950 w-16 min-w-[64px] max-w-[64px] text-center">
           <EditableCell
             type="number"
             value={r.active_listings}
             onSave={(v) => patch(r.id, "active_listings", v === null ? 0 : Number(v))}
             className="text-center"
-            cellId={`${r.id}:active_listings`}
           />
         </Td>
         <Td className="sticky left-16 z-20 bg-neutral-950 font-medium shadow-[inset_-1px_0_0_0_#525252]">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setInfoAgency(r)}
-              className="text-left text-white hover:text-neutral-300 hover:underline truncate flex-1 min-w-0 px-1 py-0.5"
-              title="Click to view/edit contact info"
-            >
-              {r.name}
-            </button>
-            <button
-              type="button"
-              onClick={() => patch(r.id, "needs_followup", !r.needs_followup)}
-              className={`shrink-0 px-0.5 ${
-                r.needs_followup ? "text-yellow-400" : "text-neutral-700 hover:text-neutral-400"
-              }`}
-              title={
-                r.needs_followup
-                  ? "Marked for follow-up - click to remove from the Follow Up section"
-                  : "Click to mark for follow-up"
-              }
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 1v14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                <path
-                  d="M3 2.2h8.2c.7 0 1.1.85.6 1.35L9.3 6l2.5 2.45c.5.5.1 1.35-.6 1.35H3V2.2z"
-                  fill="currentColor"
-                />
-              </svg>
-            </button>
-          </div>
+          <button
+            onClick={() => setInfoAgency(r)}
+            className="block w-full truncate px-1 py-0.5 text-left text-white hover:text-neutral-300 hover:underline"
+            title="Click to view/edit contact info"
+          >
+            {r.name}
+          </button>
         </Td>
         <Td>
           <EditableCell
@@ -295,136 +356,124 @@ export default function AgencyTable() {
             options={statusOptions}
             value={r.status_id}
             onSave={(v) => patch(r.id, "status_id", v)}
-            cellId={`${r.id}:status_id`}
           />
         </Td>
         <Td>
-          <EditableCell
-            value={r.phone}
-            placeholder="Phone"
-            onSave={(v) => patch(r.id, "phone", v)}
-            cellId={`${r.id}:phone`}
-          />
+          <PhoneCell agency={r} onClick={() => setPhonesAgency(r)} />
         </Td>
-        <Computed>€{r.suggested_price_per_listing}</Computed>
-        <Computed>€{r.est_monthly_value}</Computed>
+        {showSuggestedPricing && (
+          <>
+            <Computed>
+              {r.package_capacity ? (
+                <div className="leading-tight">
+                  <div>{r.package_capacity.toLocaleString("sr-RS")} oglasa</div>
+                  <div className="text-xs text-neutral-500">€{formatEuro(r.package_monthly_price)}</div>
+                </div>
+              ) : "—"}
+            </Computed>
+            <Computed>{r.price_per_listing == null ? "—" : `€${formatEuro(r.price_per_listing)}`}</Computed>
+            <Computed>€{formatEuro(r.est_monthly_value)}</Computed>
+          </>
+        )}
         <Td>
           <EditableCell
             type="date"
             value={r.trial_start_date}
             onSave={(v) => patch(r.id, "trial_start_date", v)}
-            cellId={`${r.id}:trial_start_date`}
           />
         </Td>
-        <Computed>{formatDate(r.trial_end_date)}</Computed>
-        <Computed
-          className={
-            r.days_left_in_trial != null && r.days_left_in_trial < 0 ? "text-rose-400" : ""
-          }
-        >
-          {r.days_left_in_trial ?? ""}
+        <Computed>
+          <div className="flex items-center gap-1.5 whitespace-nowrap">
+            <span>{formatDate(r.trial_end_date) || "—"}</span>
+            <TrialEndBadge daysLeft={r.days_left_in_trial} />
+          </div>
         </Computed>
-        <Td>
-          <EditableCell
-            type="number"
-            value={r.discount_percent}
-            placeholder="0"
-            onSave={(v) => patch(r.id, "discount_percent", v === null ? 0 : Number(v))}
-            cellId={`${r.id}:discount_percent`}
-          />
-        </Td>
         <Td className={overdue ? "bg-rose-900/50 rounded" : ""}>
-          <div
-            className={`min-h-[28px] px-1 py-0.5 text-sm ${
+          <button
+            type="button"
+            onClick={() => openFollowups(r, "schedule")}
+            className={`flex min-h-[28px] w-full items-center gap-1.5 rounded px-1 py-0.5 text-left text-sm hover:bg-neutral-800/60 ${
               overdue ? "text-rose-200 font-medium" : "text-neutral-300"
             }`}
             title={r.next_followup_note || "Set via the Follow-ups button's “Set next follow-up” option"}
           >
-            {formatDate(r.next_followup_date) || <span className="text-neutral-600">—</span>}
-          </div>
-        </Td>
-        <Computed>{r.followup_count}</Computed>
-        <Td>
-          <EditableCell
-            value={r.notes}
-            onSave={(v) => patch(r.id, "notes", v)}
-            clampable
-            className="w-[260px]"
-            cellId={`${r.id}:notes`}
-          />
+            <span>{formatDate(r.next_followup_date) || <span className="text-neutral-600">—</span>}</span>
+            {followupBadge && <FollowupTimeBadge {...followupBadge} />}
+          </button>
         </Td>
         <Td>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setDrawerAgency(r)}
-              className="text-xs font-medium text-white bg-[#f01546] hover:bg-[#f2426a] px-2.5 py-1 rounded-md transition whitespace-nowrap"
-            >
-              Follow-ups
-            </button>
-            <button
-              onClick={() => removeAgency(r.id)}
-              className="text-xs font-medium text-neutral-400 hover:text-rose-300 border border-neutral-700 hover:border-rose-900 px-2.5 py-1 rounded-md transition whitespace-nowrap"
-            >
-              Delete
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => openFollowups(r, "schedule")}
+            className={`flex min-h-[28px] w-full items-center rounded px-1 py-0.5 text-left text-sm hover:bg-neutral-800/60 ${
+              r.next_followup_note ? "text-neutral-300" : "text-neutral-600"
+            }`}
+            title={r.next_followup_note || "Add a reason for this follow-up"}
+          >
+            <span className="truncate">{r.next_followup_note || (r.next_followup_date ? "Add reason" : "—")}</span>
+          </button>
+        </Td>
+        <Td>
+          <NotesCell agency={r} onClick={() => setNotesAgency(r)} />
         </Td>
       </tr>
     );
   }
 
-  if (ticketsView) {
-    return (
-      <TicketsBoard
-        agencies={rows}
-        onBack={() => setTicketsView(false)}
-        onChanged={loadTicketsCount}
-      />
-    );
-  }
-
   return (
-    <PresenceProvider>
-    <div className="h-screen flex flex-col bg-neutral-950">
-      <header className="border-b border-neutral-800 px-4 sm:px-6 py-4 flex flex-wrap items-center gap-3 justify-between shrink-0 bg-neutral-950 z-10">
-        <div className="flex items-center gap-3">
-          <img src="/logo.webp" alt="Logo" className="h-8 w-8 rounded shrink-0" />
-          <div>
-            <h1 className="text-lg font-semibold text-white">Agency Outreach</h1>
-            <p className="text-xs text-neutral-500">
-              {rows.length} agencies · {dueCount} follow-up{dueCount === 1 ? "" : "s"} due ·{" "}
-              {openTicketsCount} open ticket{openTicketsCount === 1 ? "" : "s"}
-            </p>
-          </div>
-          <div className="hidden sm:flex items-center rounded-lg border border-neutral-800 bg-neutral-900 p-1 ml-2">
-            <button className="rounded-md bg-neutral-700 px-3 py-1.5 text-sm font-medium text-white">
-              Agencies
-            </button>
-            <button
-              onClick={() => setTicketsView(true)}
-              className="relative rounded-md px-3 py-1.5 text-sm text-neutral-400 hover:text-white"
-            >
-              Tickets
-              {openTicketsCount > 0 && (
-                <span className="ml-1.5 rounded-full bg-[#f01546] px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                  {openTicketsCount}
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="app-shell h-screen flex flex-col bg-neutral-950">
+      <WorkspaceHeader
+        activeView={ticketsView ? "tickets" : "agencies"}
+        onAgencies={() => setTicketsView(false)}
+        onTickets={() => setTicketsView(true)}
+        openTicketsCount={openTicketsCount}
+        viewItems={[
+          {
+            label: showSuggestedPricing ? "Hide suggested pricing" : "Show suggested pricing",
+            hint: showSuggestedPricing ? "On" : "Off",
+            onClick: toggleSuggestedPricing,
+          },
+        ]}
+        settingsItems={[
+          { label: "Add agency", hint: "+", onClick: () => addAgencyHostRef.current?.open() },
+          { label: "Manage statuses", onClick: () => statusManagerHostRef.current?.open() },
+          {
+            label: "Reset priority order",
+            hint: sortField ? "Active" : "Default",
+            onClick: () => {
+              setSortField(null);
+              setSortDir("asc");
+              setVisibleCount(ROWS_PER_BATCH);
+            },
+          },
+        ]}
+      />
+
+      <AddAgencyHost ref={addAgencyHostRef} onAdded={load} />
+
+      {ticketsView ? (
+        <TicketsBoard agencies={rows} onChanged={loadTicketsCount} onAgencyChanged={load} />
+      ) : (
+        <>
+        <div className="agency-table-tools">
+          <div className="toolbar flex-wrap">
           <input
             type="text"
             placeholder="Search agencies..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-[#f01546]"
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setVisibleCount(ROWS_PER_BATCH);
+            }}
+            className="control-field w-44 sm:w-52"
           />
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#f01546]"
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setVisibleCount(ROWS_PER_BATCH);
+            }}
+            className="control-field max-w-[160px]"
           >
             <option value="">All statuses</option>
             {statuses.map((s) => (
@@ -433,66 +482,37 @@ export default function AgencyTable() {
               </option>
             ))}
           </select>
-          <button
-            onClick={() => setOnlyDue((v) => !v)}
-            className={`relative text-sm px-3 py-1.5 rounded-lg border transition ${
-              onlyDue
-                ? "bg-rose-700/80 border-rose-600 text-white"
-                : "bg-neutral-900 border-neutral-700 text-neutral-300 hover:border-neutral-600"
-            }`}
-            title="Shows every agency with a next follow-up set - overdue or still upcoming"
-          >
-            Has a follow-up scheduled
-            {todayFollowupCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-[#f01546] text-white text-[11px] font-semibold leading-none">
-                {todayFollowupCount}
-              </span>
-            )}
-          </button>
-          {sortField && (
-            <button
-              onClick={() => setSortField(null)}
-              className="text-xs text-neutral-500 hover:text-white underline"
-            >
-              Reset to priority order
-            </button>
-          )}
-          <button
-            onClick={() => setStatusModalOpen(true)}
-            className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-300 hover:border-neutral-600"
-          >
-            Manage Statuses
-          </button>
-          <button
-            onClick={() => setTicketsView(true)}
-            className="sm:hidden relative text-sm px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-300"
-          >
-            Tickets {openTicketsCount > 0 ? `(${openTicketsCount})` : ""}
-          </button>
-          <form onSubmit={addAgency} className="flex items-center gap-2">
-            <input
-              type="text"
-              placeholder="New agency name..."
-              value={addingName}
-              onChange={(e) => setAddingName(e.target.value)}
-              className="bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-[#f01546] w-44"
-            />
-            <button
-              type="submit"
-              disabled={adding}
-              className="bg-[#f01546] hover:bg-[#f2426a] disabled:opacity-50 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition"
-            >
-              + Add
-            </button>
-          </form>
+          </div>
+          <span className="agency-table-tools__meta">
+            {filtered.length} of {rows.length} agencies · {dueCount} due
+          </span>
         </div>
-      </header>
 
-      <div className="thin-scroll flex-1 overflow-auto">
+      <div ref={tableFrameRef} className="table-frame thin-scroll flex-1 overflow-auto">
         {loading ? (
           <p className="text-neutral-500 text-sm p-6">Loading...</p>
+        ) : loadError ? (
+          <div className="flex min-h-52 flex-col items-center justify-center gap-3 p-8 text-center">
+            <div>
+              <p className="text-sm font-medium text-rose-400">Couldn't load the workspace</p>
+              <p className="mt-1 max-w-md text-xs text-neutral-500">{loadError}</p>
+            </div>
+            <button
+              type="button"
+              className="control-button"
+              onClick={() => {
+                load();
+                loadStatuses();
+                loadTicketsCount();
+              }}
+            >
+              Retry
+            </button>
+          </div>
         ) : (
-          <table className="min-w-[1750px] w-full border-collapse">
+          <div className={`agency-grid ${showSuggestedPricing ? "min-w-[1864px]" : "min-w-[1494px]"}`}>
+          <table className="agency-grid__table agency-grid__header">
+            <AgencyColGroup showSuggestedPricing={showSuggestedPricing} />
             <thead>
               <tr className="text-left text-xs text-neutral-400 border-b border-neutral-800">
                 <th
@@ -511,20 +531,15 @@ export default function AgencyTable() {
                 </th>
                 <SortTh label="Status" field={SORT_FIELDS.status} {...{ sortField, sortDir, handleSort }} className="min-w-[150px]" />
                 <SortTh label="Phone" field={SORT_FIELDS.phone} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
-                <SortTh label="Suggested €/listing" field={SORT_FIELDS.suggested} {...{ sortField, sortDir, handleSort }} className="min-w-[110px]" />
-                <SortTh label="Est. monthly €" field={SORT_FIELDS.monthly} {...{ sortField, sortDir, handleSort }} className="min-w-[120px]" />
+                {showSuggestedPricing && (
+                  <>
+                    <SortTh label="Suggested package" field={SORT_FIELDS.package} {...{ sortField, sortDir, handleSort }} className="min-w-[140px]" />
+                    <SortTh label="€/listing" field={SORT_FIELDS.pricePerListing} {...{ sortField, sortDir, handleSort }} className="min-w-[110px]" />
+                    <SortTh label="Est. monthly €" field={SORT_FIELDS.monthly} {...{ sortField, sortDir, handleSort }} className="min-w-[120px]" />
+                  </>
+                )}
                 <SortTh label="Trial start" field={SORT_FIELDS.trialStart} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
                 <SortTh label="Trial end" field={SORT_FIELDS.trialEnd} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
-                <SortTh label="Days left" field={SORT_FIELDS.daysLeft} {...{ sortField, sortDir, handleSort }} className="min-w-[90px]" />
-                <SortTh
-                  label="Discount %"
-                  field={SORT_FIELDS.discountPercent}
-                  sortField={sortField}
-                  sortDir={sortDir}
-                  handleSort={handleSort}
-                  className="min-w-[90px]"
-                  title="Permanent % off the bulk price for this agency, e.g. 30 for a 30% discount. Applies automatically to Suggested €/listing and Est. monthly € above."
-                />
                 <SortTh
                   label="Next follow-up"
                   field={SORT_FIELDS.nextFollowup}
@@ -534,75 +549,367 @@ export default function AgencyTable() {
                   className="min-w-[140px]"
                   title="Set via each agency's Follow-ups button - “Set next follow-up” option."
                 />
-                <SortTh label="#" field={SORT_FIELDS.followupCount} {...{ sortField, sortDir, handleSort }} className="min-w-[70px]" />
-                <SortTh label="Notes" field={SORT_FIELDS.notes} {...{ sortField, sortDir, handleSort }} className="min-w-[260px]" />
-                <Th className="min-w-[180px]"></Th>
+                <Th className="min-w-[320px]">Follow-up reason</Th>
+                <SortTh label="Notes" field={SORT_FIELDS.notes} {...{ sortField, sortDir, handleSort }} className="min-w-[240px]" />
               </tr>
             </thead>
+          </table>
+
+          {followUpRows.length > 0 && (
+            <FollowUpSection count={followUpRows.length} showSuggestedPricing={showSuggestedPricing}>
+              {followUpRows.map(renderRow)}
+            </FollowUpSection>
+          )}
+
+          <table className="agency-grid__table">
+            <AgencyColGroup showSuggestedPricing={showSuggestedPricing} />
             <tbody>
-              {followUpRows.length > 0 && (
-                <>
-                  <tr aria-hidden="true">
-                    <td
-                      colSpan={13}
-                      className="bg-neutral-900/80 text-[11px] font-semibold uppercase tracking-wider text-[#f2426a] px-3 py-1.5 border-t border-b border-neutral-800"
-                    >
-                      Follow Up
-                    </td>
-                  </tr>
-                  {followUpRows.map(renderRow)}
-                  <tr aria-hidden="true">
-                    <td colSpan={13} className="p-0 h-3 bg-neutral-950 border-b-4 border-neutral-800"></td>
-                  </tr>
-                </>
-              )}
-              {otherRows.map(renderRow)}
+              {visibleRows.map(renderRow)}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={13} className="text-center text-neutral-600 text-sm py-10">
+                  <td colSpan={showSuggestedPricing ? 12 : 9} className="text-center text-neutral-600 text-sm py-10">
                     No agencies match.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+          {otherRows.length > 0 && (
+            <div ref={hasMoreRows ? loadMoreRef : undefined} className="agency-load-more">
+              {hasMoreRows ? "Loading more agencies as you scroll…" : `${otherRows.length} agencies loaded`}
+            </div>
+          )}
+          </div>
         )}
       </div>
-
-      {drawerAgency && (
-        <FollowupDrawer
-          agency={drawerAgency}
-          onClose={() => setDrawerAgency(null)}
-          onLogged={load}
-          onSetNext={(date, note) =>
-            patchFields(drawerAgency.id, { next_followup_date: date, next_followup_note: note })
-          }
-        />
+        </>
       )}
+
+      <FollowupDrawerHost
+        ref={followupDrawerHostRef}
+        statuses={statuses}
+        onLogged={load}
+        onContactLogged={(agencyId, fields) => patchFields(agencyId, fields)}
+      />
 
       {infoAgency && (
         <AgencyInfoModal
           agency={infoAgency}
           onClose={() => setInfoAgency(null)}
           onSaved={load}
+          onDelete={() => removeAgency(infoAgency.id)}
         />
       )}
 
-      {statusModalOpen && (
-        <StatusManagerModal
-          statuses={statuses}
-          onClose={() => setStatusModalOpen(false)}
-          onChanged={async () => {
-            await loadStatuses();
-            await load();
-          }}
+      {phonesAgency && (
+        <PhonesModal
+          agency={phonesAgency}
+          onClose={() => setPhonesAgency(null)}
+          onSave={(phoneNumbers) => savePhones(phonesAgency.id, phoneNumbers)}
         />
       )}
+
+      {notesAgency && (
+        <AgencyNotesModal
+          agency={notesAgency}
+          onClose={() => setNotesAgency(null)}
+          onChanged={load}
+        />
+      )}
+
+      <StatusManagerHost
+        ref={statusManagerHostRef}
+        statuses={statuses}
+        onChanged={async () => {
+          await loadStatuses();
+          await load();
+        }}
+      />
 
     </div>
-    </PresenceProvider>
   );
 }
+
+function PhoneCell({ agency, onClick }) {
+  const phones = agencyPhones(agency);
+  const primaryPhone = phones[0];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex min-h-[28px] w-full items-center gap-1.5 rounded px-1 py-0.5 text-left text-sm text-neutral-300 hover:bg-neutral-800/60"
+      title={phones.length > 0 ? "View and call phone numbers" : "Add phone numbers"}
+    >
+      <span className={`min-w-0 flex-1 truncate ${primaryPhone ? "" : "text-neutral-600"}`}>
+        {primaryPhone || "Add phone"}
+      </span>
+      {phones.length > 1 && (
+        <span className="shrink-0 rounded-full bg-neutral-700 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-100">
+          {phones.length}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function NotesCell({ agency, onClick }) {
+  const noteCount = Number(agency.note_count) || 0;
+  const latestNote = agency.latest_note || "";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex min-h-[28px] w-full items-center gap-2 rounded px-1 py-0.5 text-left text-sm hover:bg-neutral-800/60"
+      title="View note history"
+    >
+      <span className={`min-w-0 flex-1 truncate ${latestNote ? "text-neutral-300" : "text-neutral-600"}`}>
+        {latestNote || "Add note"}
+      </span>
+      {noteCount > 0 && (
+        <span className="shrink-0 rounded-full bg-neutral-700 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-100">
+          {noteCount}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function FollowupTimeBadge({ label, tone }) {
+  const styles = {
+    overdue: { backgroundColor: "#991b1b", color: "#ffffff" },
+    today: { backgroundColor: "#b45309", color: "#ffffff" },
+    upcoming: { backgroundColor: "#1d4ed8", color: "#ffffff" },
+  };
+
+  return (
+    <span
+      className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none"
+      style={styles[tone] || styles.upcoming}
+    >
+      {label}
+    </span>
+  );
+}
+
+function TrialEndBadge({ daysLeft }) {
+  if (daysLeft == null) return null;
+
+  if (daysLeft < 0) {
+    return (
+      <span
+        className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+        style={{ backgroundColor: "#991b1b", color: "#ffffff" }}
+      >
+        Ended {Math.abs(daysLeft)}d
+      </span>
+    );
+  }
+
+  if (daysLeft === 0) {
+    return (
+      <span
+        className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+        style={{ backgroundColor: "#b45309", color: "#ffffff" }}
+      >
+        END
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+      style={{ backgroundColor: "#047857", color: "#ffffff" }}
+    >
+      {daysLeft}d left
+    </span>
+  );
+}
+
+function AgencyColGroup({ showSuggestedPricing }) {
+  return (
+    <colgroup>
+      {(showSuggestedPricing
+        ? [64, 190, 150, 130, 140, 110, 120, 130, 130, 140, 320, 240]
+        : [64, 190, 150, 130, 130, 130, 140, 320, 240]
+      ).map(
+        (width, index) => <col key={index} style={{ width }} />
+      )}
+
+    </colgroup>
+  );
+}
+
+function FollowUpSection({ count, children, showSuggestedPricing }) {
+  const [expanded, setExpanded] = useState(true);
+  const contentRef = useRef(null);
+
+  function toggle() {
+    const content = contentRef.current;
+    if (!content) return;
+
+    const opening = !expanded;
+    setExpanded(opening);
+    content.hidden = !opening;
+  }
+
+  return (
+    <section className="followup-section" aria-label="Follow up agencies">
+      <div className="followup-section__bar">
+        <span>Follow Up</span>
+        <span className="followup-section__count">{count}</span>
+        <button
+          type="button"
+          onClick={toggle}
+          className={`followup-collapse-button ${expanded ? "is-open" : ""}`}
+          aria-expanded={expanded}
+          aria-label={expanded ? "Hide follow-up agencies" : "Show follow-up agencies"}
+          title={expanded ? "Hide follow-up agencies" : "Show follow-up agencies"}
+        >
+          <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="m4 6 4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
+      <div ref={contentRef} className="followup-grid" aria-hidden={!expanded}>
+        <div className="followup-grid__inner">
+          <table className="agency-grid__table">
+            <AgencyColGroup showSuggestedPricing={showSuggestedPricing} />
+            <tbody>{children}</tbody>
+          </table>
+          <div className="followup-section__divider" aria-hidden="true" />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const AddAgencyHost = forwardRef(function AddAgencyHost({ onAdded }, ref) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [adding, setAdding] = useState(false);
+  const rootRef = useRef(null);
+
+  useImperativeHandle(ref, () => ({ open: () => setOpen(true) }), []);
+
+  useEffect(() => {
+    if (!open) return;
+    function close(event) {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    }
+    function closeOnEscape(event) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  async function submit(event) {
+    event.preventDefault();
+    if (!name.trim()) return;
+    setAdding(true);
+    const response = await fetch("/api/agencies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    setAdding(false);
+    if (!response.ok) return;
+    setName("");
+    setOpen(false);
+    onAdded?.();
+  }
+
+  if (!open) return null;
+
+  return (
+    <div ref={rootRef} className="add-agency-anchor">
+      <form onSubmit={submit} className="add-agency-popover">
+        <label className="mb-2 block text-xs font-medium text-neutral-400">Agency name</label>
+        <div className="flex items-center gap-2">
+          <input
+            autoFocus
+            type="text"
+            placeholder="e.g. Studio North"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            className="control-field min-w-0 flex-1"
+          />
+          <button type="submit" disabled={adding || !name.trim()} className="primary-button">
+            {adding ? "Adding..." : "Add"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+});
+
+const StatusManagerHost = forwardRef(function StatusManagerHost(
+  { statuses, onChanged },
+  ref
+) {
+  const [open, setOpen] = useState(false);
+  useImperativeHandle(ref, () => ({ open: () => setOpen(true) }), []);
+
+  if (!open) return null;
+  return (
+    <StatusManagerModal
+      statuses={statuses}
+      onClose={() => setOpen(false)}
+      onChanged={onChanged}
+    />
+  );
+});
+
+const FollowupDrawerHost = forwardRef(function FollowupDrawerHost(
+  { statuses, onLogged, onContactLogged },
+  ref
+) {
+  const [agency, setAgency] = useState(null);
+  const [initialMode, setInitialMode] = useState("log");
+  const [closing, setClosing] = useState(false);
+  const closeTimerRef = useRef(null);
+
+  useEffect(() => () => clearTimeout(closeTimerRef.current), []);
+
+  useImperativeHandle(ref, () => ({
+    open(nextAgency, nextInitialMode = "log") {
+      clearTimeout(closeTimerRef.current);
+      setAgency(nextAgency);
+      setInitialMode(nextInitialMode);
+      setClosing(false);
+    },
+  }), []);
+
+  function close() {
+    if (closing) return;
+    setClosing(true);
+    closeTimerRef.current = setTimeout(() => {
+      setAgency(null);
+      setClosing(false);
+    }, 240);
+  }
+
+  if (!agency) return null;
+
+  return (
+    <FollowupDrawer
+      agency={agency}
+      statuses={statuses}
+      initialMode={initialMode}
+      closing={closing}
+      onClose={close}
+      onLogged={onLogged}
+      onContactLogged={(fields) => onContactLogged(agency.id, fields)}
+    />
+  );
+});
 
 function sortIndicator(field, sortField, sortDir) {
   if (sortField !== field) return "";

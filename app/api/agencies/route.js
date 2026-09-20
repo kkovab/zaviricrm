@@ -11,7 +11,34 @@ export async function GET() {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ data });
+
+  // Multiple scheduled follow-ups live in their own table. Overlay the
+  // earliest one onto the existing overview shape so the main grid stays
+  // simple and always shows the next thing that is actually due.
+  const { data: scheduled, error: scheduledError } = await supabase
+    .from("scheduled_followups")
+    .select("agency_id, date, reason, created_at")
+    .order("date", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  // Before the manual migration is run, keep the legacy one-follow-up app
+  // working instead of failing the entire agency list.
+  if (scheduledError) return NextResponse.json({ data });
+
+  const nextByAgency = new Map();
+  for (const scheduledFollowup of scheduled || []) {
+    if (!nextByAgency.has(scheduledFollowup.agency_id)) {
+      nextByAgency.set(scheduledFollowup.agency_id, scheduledFollowup);
+    }
+  }
+  const dataWithEarliestSchedule = (data || []).map((agency) => {
+    const next = nextByAgency.get(agency.id);
+    return next
+      ? { ...agency, next_followup_date: next.date, next_followup_note: next.reason }
+      : { ...agency, next_followup_date: null, next_followup_note: null };
+  });
+
+  return NextResponse.json({ data: dataWithEarliestSchedule });
 }
 
 export async function POST(request) {

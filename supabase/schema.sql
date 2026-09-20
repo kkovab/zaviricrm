@@ -36,6 +36,7 @@ create table if not exists agencies (
   contact_person text,
   phone text,
   mobile_alt text,
+  phone_numbers text[] not null default '{}',
   email text,
   location text,
   active_listings integer default 0,
@@ -60,6 +61,13 @@ create table if not exists agencies (
 -- database up to date without touching your existing data. Safe to run
 -- again - each one only does something the first time.
 alter table agencies add column if not exists contact_person text;
+alter table agencies add column if not exists phone_numbers text[] not null default '{}';
+-- Preserve existing phone fields in the new multi-number list. Keeping phone
+-- and mobile_alt populated also makes this upgrade safe for older app builds.
+update agencies
+set phone_numbers = array_remove(array[nullif(trim(phone), ''), nullif(trim(mobile_alt), '')], null)
+where cardinality(phone_numbers) = 0
+  and (nullif(trim(phone), '') is not null or nullif(trim(mobile_alt), '') is not null);
 alter table agencies add column if not exists discount_percent numeric default 0;
 alter table agencies add column if not exists status_id uuid references statuses(id);
 -- Next follow-up is now something you set yourself, not auto-calculated
@@ -107,6 +115,31 @@ create table if not exists followups (
 );
 
 create index if not exists idx_followups_agency_id on followups(agency_id);
+
+-- Future contacts are separate from completed-contact history. An agency can
+-- have any number of these; the app displays the earliest one in the grid.
+create table if not exists scheduled_followups (
+  id uuid primary key default gen_random_uuid(),
+  agency_id uuid not null references agencies(id) on delete cascade,
+  date date not null,
+  reason text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_scheduled_followups_agency_date
+  on scheduled_followups(agency_id, date asc, created_at asc);
+
+-- Timestamped agency note history. The existing agencies.notes column stays
+-- untouched as legacy background information; new notes are stored here.
+create table if not exists agency_notes (
+  id uuid primary key default gen_random_uuid(),
+  agency_id uuid not null references agencies(id) on delete cascade,
+  content text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_agency_notes_agency_created
+  on agency_notes(agency_id, created_at desc);
 
 -- General-purpose per-agency to-do list, separate from the Follow Up flow
 -- above. A follow-up is about *when do I next talk to this agency and what
@@ -156,11 +189,9 @@ create trigger trg_agencies_updated_at
 -- yourself per agency, and the view just passes it through. The app reads
 -- from this view so nothing else needs to be recalculated by hand.
 --
--- Pricing: zaviri.hr only sells the "Plus" package, minimum 10 listings per
--- package. An agency buying fewer than 10 (i.e. not buying a package at all)
--- pays full retail with no bulk discount. On top of the bulk tier, each
--- agency can also carry its own permanent discount_percent (e.g. Queen Stela
--- gets 30% off everything below) - that's applied after the tier price.
+-- Pricing: the smallest package that covers an agency's active listings sets
+-- the average price per listing. The estimated monthly value uses that average
+-- price multiplied by the agency's current active-listing count.
 --
 -- Dropped and recreated (rather than "create or replace") because Postgres
 -- won't let create-or-replace insert/reorder columns in an existing view -
@@ -172,19 +203,39 @@ with base as (
   select
     a.*,
     case
-      when a.active_listings >= 1000 then 7.49
-      when a.active_listings >= 500 then 8.49
-      when a.active_listings >= 250 then 9.49
-      when a.active_listings >= 100 then 10.49
-      when a.active_listings >= 50 then 11.99
-      when a.active_listings >= 25 then 13.49
-      when a.active_listings >= 10 then 14.99
-      else 20
+      when a.active_listings > 0 and a.active_listings <= 50 then 50
+      when a.active_listings > 0 and a.active_listings <= 100 then 100
+      when a.active_listings > 0 and a.active_listings <= 150 then 150
+      when a.active_listings > 0 and a.active_listings <= 300 then 300
+      when a.active_listings > 0 and a.active_listings <= 500 then 500
+      when a.active_listings > 0 and a.active_listings <= 1000 then 1000
+      when a.active_listings > 1000 then 2000
+      else null
+    end as package_capacity,
+    case
+      when a.active_listings > 0 and a.active_listings <= 50 then 599.50
+      when a.active_listings > 0 and a.active_listings <= 100 then 1049.00
+      when a.active_listings > 0 and a.active_listings <= 150 then 1499.00
+      when a.active_listings > 0 and a.active_listings <= 300 then 2847.00
+      when a.active_listings > 0 and a.active_listings <= 500 then 4495.00
+      when a.active_listings > 0 and a.active_listings <= 1000 then 8490.00
+      when a.active_listings > 1000 then 15980.00
+      else null
+    end as package_monthly_price,
+    case
+      when a.active_listings > 0 and a.active_listings <= 50 then 11.99
+      when a.active_listings > 0 and a.active_listings <= 100 then 10.49
+      when a.active_listings > 0 and a.active_listings <= 150 then 9.99
+      when a.active_listings > 0 and a.active_listings <= 300 then 9.49
+      when a.active_listings > 0 and a.active_listings <= 500 then 8.99
+      when a.active_listings > 0 and a.active_listings <= 1000 then 8.49
+      when a.active_listings > 1000 then 7.99
+      else null
     end as base_price_per_listing
   from agencies a
 )
 select
-  b.id, b.name, b.contact_person, b.phone, b.mobile_alt, b.email, b.location,
+  b.id, b.name, b.contact_person, b.phone, b.mobile_alt, b.phone_numbers, b.email, b.location,
   b.active_listings, b.qualified, b.oglasnik_profil, b.website, b.needs_followup,
   s.id as status_id,
   coalesce(s.name, 'Not Contacted') as status,
@@ -195,10 +246,11 @@ select
   b.discount_offered,
   b.discount_percent, b.what_they_know, b.what_they_still_need, b.notes,
   b.created_at, b.updated_at,
-  round(b.base_price_per_listing * (1 - coalesce(b.discount_percent, 0) / 100.0), 2)
-    as suggested_price_per_listing,
+  b.package_capacity,
+  b.package_monthly_price,
+  b.base_price_per_listing as price_per_listing,
   round(
-    b.active_listings * b.base_price_per_listing * (1 - coalesce(b.discount_percent, 0) / 100.0),
+    b.active_listings * b.base_price_per_listing,
     2
   ) as est_monthly_value,
   case
@@ -211,14 +263,24 @@ select
     else null
   end as days_left_in_trial,
   f.last_followup_date,
-  coalesce(f.followup_count, 0) as followup_count
+  coalesce(f.followup_count, 0) as followup_count,
+  coalesce(n.note_count, 0) as note_count,
+  n.latest_note
 from base b
 left join statuses s on s.id = b.status_id
 left join (
   select agency_id, max(date) as last_followup_date, count(*) as followup_count
   from followups
   group by agency_id
-) f on f.agency_id = b.id;
+) f on f.agency_id = b.id
+left join (
+  select
+    agency_id,
+    count(*) as note_count,
+    (array_agg(content order by created_at desc))[1] as latest_note
+  from agency_notes
+  group by agency_id
+) n on n.agency_id = b.id;
 
 -- Row Level Security: locked down by default. The app's server-side API routes
 -- use the service_role key, which bypasses RLS, so the app keeps working.
@@ -226,5 +288,7 @@ left join (
 -- public anon key if it ever leaked.
 alter table agencies enable row level security;
 alter table followups enable row level security;
+alter table scheduled_followups enable row level security;
+alter table agency_notes enable row level security;
 alter table statuses enable row level security;
 alter table tickets enable row level security;

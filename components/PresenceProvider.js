@@ -1,6 +1,14 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { getStoredName, setStoredName, colorForName } from "@/lib/presence";
@@ -39,6 +47,9 @@ function CursorIcon({ color }) {
 }
 
 export default function PresenceProvider({ children }) {
+  // Portals do not exist in the server-rendered tree. Keep the first client
+  // render identical to SSR, then enable browser-only UI after hydration.
+  const [mounted, setMounted] = useState(false);
   // null = still checking localStorage, "" = checked and there isn't one
   // yet (show the name prompt), anything else = the name to use.
   const [name, setName] = useState(null);
@@ -54,6 +65,7 @@ export default function PresenceProvider({ children }) {
 
   useEffect(() => {
     setName(getStoredName());
+    setMounted(true);
   }, []);
 
   useEffect(() => {
@@ -192,7 +204,7 @@ export default function PresenceProvider({ children }) {
     };
   }, [name]);
 
-  function setActiveCell(cellId) {
+  const setActiveCell = useCallback((cellId) => {
     activeCellRef.current = cellId;
     const channel = channelRef.current;
     if (!channel || !name) return;
@@ -203,12 +215,20 @@ export default function PresenceProvider({ children }) {
       cellId,
       afk: afkRef.current,
     });
-  }
+  }, [name]);
 
-  function othersOnCell(cellId) {
+  const othersOnCell = useCallback((cellId) => {
     if (!cellId) return [];
     return others[cellId] || [];
-  }
+  }, [others]);
+
+  // Cursor broadcasts arrive many times per second. Keep the context object
+  // stable while only cursor positions change so every editable cell in the
+  // large agency table does not re-render for somebody else's mouse movement.
+  const presenceValue = useMemo(
+    () => ({ name, setActiveCell, othersOnCell }),
+    [name, setActiveCell, othersOnCell]
+  );
 
   function saveName(raw) {
     const trimmed = raw.trim();
@@ -248,12 +268,12 @@ export default function PresenceProvider({ children }) {
   );
 
   return (
-    <PresenceContext.Provider value={{ name, setActiveCell, othersOnCell }}>
+    <PresenceContext.Provider value={presenceValue}>
       {children}
 
-      {typeof document !== "undefined" && createPortal(cursorLayer, document.body)}
+      {mounted && createPortal(cursorLayer, document.body)}
 
-      {name === "" && (
+      {mounted && name === "" && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 px-4">
           <div className="w-full max-w-sm bg-neutral-900 border border-neutral-800 rounded-xl shadow-2xl p-6">
             <h2 className="font-semibold text-white mb-1">What's your name?</h2>

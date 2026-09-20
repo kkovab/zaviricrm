@@ -3,7 +3,9 @@ import { supabaseServer } from "@/lib/supabaseServer";
 import {
   encodeLegacyTicketMeta,
   isMissingRichTicketColumns,
+  normalizeTicketPriority,
   normalizeTicket,
+  withTicketPriority,
 } from "@/lib/ticketData";
 
 const AGENCY_SELECT =
@@ -52,6 +54,8 @@ export async function POST(request) {
   const tags = Array.isArray(body.tags)
     ? body.tags.filter((tag) => typeof tag === "string" && tag.trim()).slice(0, 12)
     : [];
+  const priority = normalizeTicketPriority(body.priority);
+  const storedTags = withTicketPriority(tags, priority);
   const details = body.details?.trim() || null;
   const baseInsert = {
     agency_id: body.agency_id,
@@ -64,7 +68,7 @@ export async function POST(request) {
     .from("tickets")
     .insert({
       ...baseInsert,
-      tags,
+      tags: storedTags,
       details,
     })
     .select(AGENCY_SELECT)
@@ -77,7 +81,7 @@ export async function POST(request) {
       .from("tickets")
       .insert({
         ...baseInsert,
-        type: encodeLegacyTicketMeta({ tags, details, type: baseInsert.type }),
+        type: encodeLegacyTicketMeta({ tags, details, type: baseInsert.type, priority }),
       })
       .select(AGENCY_SELECT)
       .single());

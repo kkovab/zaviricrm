@@ -8,6 +8,7 @@ const EDITABLE_FIELDS = [
   "contact_person",
   "phone",
   "mobile_alt",
+  "phone_numbers",
   "email",
   "location",
   "active_listings",

@@ -4,7 +4,9 @@ import {
   decodeLegacyTicketMeta,
   encodeLegacyTicketMeta,
   isMissingRichTicketColumns,
+  normalizeTicketPriority,
   normalizeTicket,
+  withTicketPriority,
 } from "@/lib/ticketData";
 
 const EDITABLE_FIELDS = ["title", "type", "tags", "details", "due_date", "done"];
@@ -21,6 +23,10 @@ export async function PATCH(request, { params }) {
     if (EDITABLE_FIELDS.includes(key)) {
       update[key] = body[key];
     }
+  }
+
+  if (Array.isArray(body.tags)) {
+    update.tags = withTicketPriority(body.tags, normalizeTicketPriority(body.priority));
   }
 
   if (Object.keys(update).length === 0) {
@@ -58,6 +64,7 @@ export async function PATCH(request, { params }) {
       tags: update.tags ?? legacy?.tags ?? (current.type && !legacy ? [current.type] : []),
       details: update.details ?? legacy?.details ?? null,
       type: update.type ?? legacy?.type ?? (legacy ? null : current.type),
+      priority: normalizeTicketPriority(body.priority ?? legacy?.priority),
     });
 
     ({ data, error } = await supabase

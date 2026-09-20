@@ -2,22 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { formatDate, isTicketOverdue } from "@/lib/constants";
+import { TICKET_ACTIONS } from "@/lib/ticketData";
+import ActionMenu from "./ActionMenu";
+import AgencyInfoModal from "./AgencyInfoModal";
 
-const TAGS = ["Email", "Prices", "Link", "Promotion", "XML", "Phone", "Website", "Admin"];
-const TAG_COLORS = {
-  Email: "border-sky-500/30 bg-sky-500/15 text-sky-300",
-  Prices: "border-amber-500/30 bg-amber-500/15 text-amber-300",
-  Link: "border-violet-500/30 bg-violet-500/15 text-violet-300",
-  Promotion: "border-pink-500/30 bg-pink-500/15 text-pink-300",
-  XML: "border-emerald-500/30 bg-emerald-500/15 text-emerald-300",
-  Phone: "border-cyan-500/30 bg-cyan-500/15 text-cyan-300",
-  Website: "border-indigo-500/30 bg-indigo-500/15 text-indigo-300",
-  Admin: "border-orange-500/30 bg-orange-500/15 text-orange-300",
-};
+const PRIORITY_ORDER = { urgent: 0, medium: 1, low: 2 };
 
-const EMPTY_FORM = { agencyId: "", title: "", details: "", dueDate: "", tags: [] };
+const EMPTY_FORM = { agencyId: "", title: "", details: "", dueDate: "", tags: [], priority: "medium" };
 
-export default function TicketsBoard({ agencies, onBack, onChanged }) {
+export default function TicketsBoard({ agencies, onChanged, onAgencyChanged }) {
   const [tickets, setTickets] = useState([]);
   const [tab, setTab] = useState("open");
   const [agencyFilter, setAgencyFilter] = useState("");
@@ -28,6 +21,7 @@ export default function TicketsBoard({ agencies, onBack, onChanged }) {
   const [composerOpen, setComposerOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
+  const [agencyToEdit, setAgencyToEdit] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -68,7 +62,9 @@ export default function TicketsBoard({ agencies, onBack, onChanged }) {
 
   async function createTicket(event) {
     event.preventDefault();
-    if (!form.agencyId || !form.title.trim()) return;
+    const generatedTitle = form.tags.join(" · ");
+    const title = form.title.trim() || generatedTitle;
+    if (!form.agencyId || !title) return;
     setSaving(true);
     setError("");
     const res = await fetch("/api/tickets", {
@@ -76,10 +72,11 @@ export default function TicketsBoard({ agencies, onBack, onChanged }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         agency_id: form.agencyId,
-        title: form.title.trim(),
+        title,
         details: form.details.trim() || null,
         tags: form.tags,
         due_date: form.dueDate || null,
+        priority: form.priority,
       }),
     });
     const json = await res.json().catch(() => ({}));
@@ -152,90 +149,67 @@ export default function TicketsBoard({ agencies, onBack, onChanged }) {
         .join(" ")
         .toLowerCase()
         .includes(query);
+    }).sort((a, b) => {
+      const priorityDifference = (PRIORITY_ORDER[a.priority] ?? 1) - (PRIORITY_ORDER[b.priority] ?? 1);
+      if (priorityDifference !== 0) return priorityDifference;
+      if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date);
+      if (a.due_date) return -1;
+      if (b.due_date) return 1;
+      return 0;
     });
   }, [tickets, tab, agencyFilter, search]);
 
-  return (
-    <div className="h-screen flex flex-col bg-neutral-950 text-white">
-      <header className="border-b border-neutral-800 bg-neutral-950 px-4 py-4 sm:px-6 shrink-0">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <img src="/logo.webp" alt="Logo" className="h-8 w-8 rounded shrink-0" />
-            <div>
-              <h1 className="text-lg font-semibold">Agency Outreach</h1>
-              <p className="text-xs text-neutral-500">{counts.open} open tickets</p>
-            </div>
-            <div className="flex items-center rounded-lg border border-neutral-800 bg-neutral-900 p-1 ml-1 sm:ml-3">
-              <button
-                onClick={onBack}
-                className="rounded-md px-3 py-1.5 text-sm text-neutral-400 hover:text-white"
-              >
-                Agencies
-              </button>
-              <button className="rounded-md bg-neutral-700 px-3 py-1.5 text-sm font-medium text-white">
-                Tickets
-                {counts.open > 0 && (
-                  <span className="ml-1.5 rounded-full bg-[#f01546] px-1.5 py-0.5 text-[10px] font-semibold">
-                    {counts.open}
-                  </span>
-                )}
-              </button>
-            </div>
-          </div>
-          <button
-            onClick={() => setComposerOpen((open) => !open)}
-            className="rounded-lg bg-[#f01546] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#f2426a]"
-          >
-            {composerOpen ? "Close" : "+ New ticket"}
-          </button>
-        </div>
-      </header>
+  const hasTicketAction = form.tags.length > 0;
 
-      <main className="thin-scroll flex-1 overflow-auto px-4 py-5 sm:px-6">
-        <div className="mx-auto max-w-[1500px]">
+  return (
+      <main className="thin-scroll min-h-0 flex-1 overflow-auto px-4 py-5 text-white sm:px-6">
+        <div className="w-full">
           {composerOpen && (
-            <form
-              onSubmit={createTicket}
-              className="mb-5 rounded-xl border border-neutral-800 bg-neutral-900 p-4 shadow-xl shadow-black/10"
-            >
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-sm font-semibold">New ticket</h2>
-                  <p className="mt-0.5 text-xs text-neutral-500">Add the agency, action and everything that needs to be sent.</p>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6" onClick={() => { if (!saving) resetComposer(); }}>
+              <form onSubmit={createTicket} onClick={(event) => event.stopPropagation()} className="ticket-composer-modal modal-surface w-full max-w-4xl overflow-visible rounded-2xl border shadow-2xl">
+                <div className="modal-header flex items-center justify-between gap-3 border-b px-5 py-4">
+                  <div>
+                    <h2 className="font-semibold text-white">New ticket</h2>
+                    <p className="mt-0.5 text-xs text-neutral-500">Pick the agency and requested actions so the next person knows exactly what to do.</p>
+                  </div>
+                  <button type="button" onClick={resetComposer} disabled={saving} className="text-sm text-neutral-500 hover:text-white disabled:opacity-40">Close</button>
                 </div>
-                <button type="button" onClick={resetComposer} className="text-xs text-neutral-500 hover:text-white">
-                  Cancel
-                </button>
-              </div>
-              <div className="grid gap-3 lg:grid-cols-[minmax(180px,.8fr)_minmax(280px,1.4fr)_160px]">
-                <FieldLabel label="Agency">
-                  <select value={form.agencyId} onChange={(e) => setField("agencyId", e.target.value)} className="ticket-field">
-                    <option value="">Select agency...</option>
-                    {agencies.map((agency) => <option key={agency.id} value={agency.id}>{agency.name}</option>)}
-                  </select>
-                </FieldLabel>
-                <FieldLabel label="Action">
-                  <input value={form.title} onChange={(e) => setField("title", e.target.value)} placeholder="e.g. Send an onboarding email" className="ticket-field" />
-                </FieldLabel>
-                <FieldLabel label="Due date">
-                  <input type="date" value={form.dueDate} onChange={(e) => setField("dueDate", e.target.value)} className="ticket-field" />
-                </FieldLabel>
-              </div>
-              <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(280px,1.4fr)_minmax(340px,1fr)]">
-                <FieldLabel label="Details / what should be said">
-                  <textarea value={form.details} onChange={(e) => setField("details", e.target.value)} placeholder="Short brief, exact message or any context your friend needs..." rows={3} className="ticket-field resize-none" />
-                </FieldLabel>
-                <div>
-                  <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-neutral-500">Tags</p>
-                  <TagPicker selected={form.tags} onToggle={toggleTag} />
+
+                <div className="space-y-4 px-5 py-4">
+                  <div className="grid gap-3 lg:grid-cols-[minmax(280px,1fr)_150px_150px]">
+                    <FieldLabel label="Agency">
+                      <AgencyPicker agencies={agencies} value={form.agencyId} onChange={(agencyId) => setField("agencyId", agencyId)} />
+                    </FieldLabel>
+                    <FieldLabel label="Due date">
+                      <input type="date" value={form.dueDate} onChange={(e) => setField("dueDate", e.target.value)} className="ticket-field" />
+                    </FieldLabel>
+                    <FieldLabel label="Priority">
+                      <select value={form.priority} onChange={(e) => setField("priority", e.target.value)} className="ticket-field">
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="urgent">Urgent</option>
+                      </select>
+                    </FieldLabel>
+                  </div>
+                  <div className="grid gap-3 lg:grid-cols-[minmax(280px,1.4fr)_minmax(340px,1fr)]">
+                    <FieldLabel label="Details / what should be said">
+                      <textarea value={form.details} onChange={(e) => setField("details", e.target.value)} placeholder="Short brief, exact message or any context your friend needs..." rows={3} className="ticket-field resize-none" />
+                    </FieldLabel>
+                    <div>
+                      <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-neutral-500">Requested actions</p>
+                      <TagPicker selected={form.tags} onToggle={toggleTag} />
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="mt-4 flex justify-end">
-                <button disabled={saving || !form.agencyId || !form.title.trim()} className="rounded-lg bg-[#f01546] px-5 py-2 text-sm font-medium disabled:opacity-40">
-                  {saving ? "Adding..." : "Add ticket"}
-                </button>
-              </div>
-            </form>
+
+                <div className="modal-footer flex justify-end gap-3 border-t px-5 py-4">
+                  <button type="button" onClick={resetComposer} disabled={saving} className="activity-action activity-action--quiet disabled:opacity-40">Cancel</button>
+                  <button disabled={saving || !form.agencyId || !hasTicketAction} className="primary-button disabled:opacity-40">
+                    {saving ? "Adding..." : "Add ticket"}
+                  </button>
+                </div>
+              </form>
+            </div>
           )}
 
           {error && (
@@ -255,13 +229,37 @@ export default function TicketsBoard({ agencies, onBack, onChanged }) {
               <option value="">All agencies</option>
               {agencies.map((agency) => <option key={agency.id} value={agency.id}>{agency.name}</option>)}
             </select>
+            <button onClick={() => setComposerOpen((open) => !open)} className="primary-button ml-auto">
+              {composerOpen ? "Close composer" : "+ New ticket"}
+            </button>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/50">
+          <div className="ticket-mobile-list md:hidden">
+            {loading ? (
+              <div className="p-10 text-center text-sm text-neutral-500">Loading tickets...</div>
+            ) : visible.length === 0 ? (
+              <div className="p-10 text-center"><p className="text-sm text-neutral-400">No tickets in this view.</p></div>
+            ) : visible.map((ticket) => (
+              <TicketMobileCard
+                key={ticket.id}
+                ticket={ticket}
+                editing={editingId === ticket.id}
+                saving={saving}
+                onEdit={() => setEditingId(ticket.id)}
+                onCancelEdit={() => setEditingId(null)}
+                onSave={async (fields) => { if (await updateTicket(ticket, fields)) setEditingId(null); }}
+                onToggle={() => updateTicket(ticket, { done: !ticket.done })}
+                onDelete={() => deleteTicket(ticket)}
+                onSetEmail={() => setAgencyToEdit(agencies.find((agency) => agency.id === ticket.agency_id) || null)}
+              />
+            ))}
+          </div>
+
+          <div className="modal-surface hidden overflow-visible rounded-xl border border-neutral-800 bg-neutral-900/50 md:block">
             <div className="thin-scroll overflow-x-auto">
-              <div className="min-w-[1080px]">
-                <div className="grid grid-cols-[44px_190px_minmax(310px,1.5fr)_minmax(225px,1fr)_125px_120px] gap-3 border-b border-neutral-800 bg-neutral-900 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
-                  <span></span><span>Agency</span><span>Ticket</span><span>Contact</span><span>Due</span><span className="text-right">Actions</span>
+              <div className="min-w-[1180px]">
+                <div className="grid grid-cols-[18px_44px_190px_minmax(310px,1.5fr)_minmax(225px,1fr)_125px_120px] gap-3 border-b border-neutral-800 bg-neutral-900 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                  <span></span><span></span><span>Agency</span><span>Ticket</span><span>Contact</span><span>Due</span><span className="text-right">Actions</span>
                 </div>
                 {loading ? (
                   <div className="p-10 text-center text-sm text-neutral-500">Loading tickets...</div>
@@ -283,19 +281,26 @@ export default function TicketsBoard({ agencies, onBack, onChanged }) {
                     }}
                     onToggle={() => updateTicket(ticket, { done: !ticket.done })}
                     onDelete={() => deleteTicket(ticket)}
+                    onSetEmail={() => setAgencyToEdit(agencies.find((agency) => agency.id === ticket.agency_id) || null)}
                   />
                 ))}
               </div>
             </div>
           </div>
+
+          {agencyToEdit && (
+            <AgencyInfoModal
+              agency={agencyToEdit}
+              initialFocus="email"
+              onClose={() => setAgencyToEdit(null)}
+              onSaved={async () => {
+                await onAgencyChanged?.();
+                await load();
+              }}
+            />
+          )}
         </div>
       </main>
-
-      <style jsx global>{`
-        .ticket-field { width: 100%; border: 1px solid #404040; border-radius: .5rem; background: #262626; padding: .5rem .65rem; color: white; font-size: .875rem; outline: none; }
-        .ticket-field:focus { border-color: #f01546; box-shadow: 0 0 0 1px rgba(240, 21, 70, .25); }
-      `}</style>
-    </div>
   );
 }
 
@@ -309,20 +314,73 @@ function FieldLabel({ label, children }) {
 }
 
 function Tag({ children }) {
-  return <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${TAG_COLORS[children] || "border-neutral-600 bg-neutral-700/50 text-neutral-300"}`}>{children}</span>;
+  const isAction = TICKET_ACTIONS.includes(children);
+  return <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${isAction ? "border-[color:var(--brand)]/35 bg-[color:var(--brand-soft)] text-neutral-100" : "border-neutral-600 bg-neutral-700/50 text-neutral-300"}`}>{children}</span>;
 }
 
 function TagPicker({ selected, onToggle }) {
-  return <div className="flex flex-wrap gap-1.5">{TAGS.map((tag) => <button type="button" key={tag} onClick={() => onToggle(tag)} className={`rounded-full border px-2.5 py-1 text-xs transition ${selected.includes(tag) ? TAG_COLORS[tag] : "border-neutral-700 bg-neutral-800 text-neutral-500 hover:border-neutral-500 hover:text-neutral-300"}`}>{tag}</button>)}</div>;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {TICKET_ACTIONS.map((tag) => <button type="button" key={tag} onClick={() => onToggle(tag)} className={`rounded-full border px-2.5 py-1 text-xs transition ${selected.includes(tag) ? "border-[color:var(--brand)]/55 bg-[color:var(--brand-soft)] text-white" : "border-neutral-700 bg-neutral-800 text-neutral-500 hover:border-neutral-500 hover:text-neutral-300"}`}>{tag}</button>)}
+      {selected.filter((tag) => !TICKET_ACTIONS.includes(tag)).map((tag) => <button type="button" key={tag} onClick={() => onToggle(tag)} className="rounded-full border border-neutral-600 bg-neutral-700/50 px-2.5 py-1 text-xs text-neutral-200 transition hover:border-neutral-400">{tag} ×</button>)}
+    </div>
+  );
 }
 
-function TicketRow({ ticket, editing, saving, onEdit, onCancelEdit, onSave, onToggle, onDelete }) {
-  const overdue = isTicketOverdue(ticket);
-  const agency = ticket.agency || {};
-  const [draft, setDraft] = useState({ title: ticket.title, details: ticket.details || "", dueDate: ticket.due_date || "", tags: ticket.tags || [] });
+function AgencyPicker({ agencies, value, onChange }) {
+  const selectedAgency = agencies.find((agency) => agency.id === value);
+  const [query, setQuery] = useState(selectedAgency?.name || "");
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (editing) setDraft({ title: ticket.title, details: ticket.details || "", dueDate: ticket.due_date || "", tags: ticket.tags || [] });
+    setQuery(selectedAgency?.name || "");
+  }, [selectedAgency?.id, selectedAgency?.name]);
+
+  const matches = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    return agencies.filter((agency) => !normalized || agency.name.toLowerCase().includes(normalized)).slice(0, 8);
+  }, [agencies, query]);
+
+  return (
+    <div className="relative">
+      <input
+        value={query}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          onChange("");
+          setOpen(true);
+        }}
+        placeholder="Search agency..."
+        className="ticket-field"
+      />
+      {open && (
+        <div className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 p-1 shadow-xl">
+          {matches.length === 0 ? <p className="px-2 py-2 text-xs text-neutral-500">No agencies found.</p> : matches.map((agency) => (
+            <button
+              type="button"
+              key={agency.id}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => { onChange(agency.id); setQuery(agency.name); setOpen(false); }}
+              className="block w-full rounded-md px-2 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-800 hover:text-white"
+            >
+              {agency.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TicketRow({ ticket, editing, saving, onEdit, onCancelEdit, onSave, onToggle, onDelete, onSetEmail }) {
+  const overdue = isTicketOverdue(ticket);
+  const agency = ticket.agency || {};
+  const [draft, setDraft] = useState({ title: ticket.title, details: ticket.details || "", dueDate: ticket.due_date || "", tags: ticket.tags || [], priority: ticket.priority || "medium" });
+
+  useEffect(() => {
+    if (editing) setDraft({ title: ticket.title, details: ticket.details || "", dueDate: ticket.due_date || "", tags: ticket.tags || [], priority: ticket.priority || "medium" });
   }, [editing, ticket]);
 
   function toggleDraftTag(tag) {
@@ -330,8 +388,11 @@ function TicketRow({ ticket, editing, saving, onEdit, onCancelEdit, onSave, onTo
   }
 
   return (
-    <div className={`border-b border-neutral-800/80 last:border-0 ${overdue ? "bg-rose-950/15" : "hover:bg-neutral-900/70"}`}>
-      <div className="grid grid-cols-[44px_190px_minmax(310px,1.5fr)_minmax(225px,1fr)_125px_120px] gap-3 px-3 py-3.5 text-sm">
+    <div className={`ticket-row border-b border-neutral-800/80 last:border-0 ${overdue ? "is-overdue" : ""}`}>
+      <div className="grid grid-cols-[18px_44px_190px_minmax(310px,1.5fr)_minmax(225px,1fr)_125px_120px] gap-3 px-3 py-3.5 text-sm">
+        <div className="flex justify-center pt-1" title={`${ticket.priority || "medium"} priority`}>
+          <PriorityFlag priority={ticket.priority} />
+        </div>
         <div className="pt-0.5">
           <button onClick={onToggle} disabled={saving} title={ticket.done ? "Restore ticket" : "Mark complete"} className={`flex h-5 w-5 items-center justify-center rounded border transition ${ticket.done ? "border-emerald-600 bg-emerald-600 text-white" : "border-neutral-600 text-transparent hover:border-emerald-500"}`}>✓</button>
         </div>
@@ -347,6 +408,7 @@ function TicketRow({ ticket, editing, saving, onEdit, onCancelEdit, onSave, onTo
         </div>
         <div className="min-w-0 space-y-1 text-xs">
           {agency.email && <a href={`mailto:${agency.email}`} className="block truncate text-sky-300 hover:underline" title={agency.email}>✉ {agency.email}</a>}
+          {!agency.email && <button type="button" onClick={onSetEmail} className="block text-left font-medium text-[color:var(--brand)] hover:underline">No email — set one</button>}
           {agency.phone && <a href={`tel:${agency.phone}`} className="block truncate text-neutral-300 hover:text-white">☎ {agency.phone}</a>}
           {agency.mobile_alt && <a href={`tel:${agency.mobile_alt}`} className="block truncate text-neutral-400 hover:text-white">Mobile: {agency.mobile_alt}</a>}
           <div className="flex flex-wrap gap-x-2 gap-y-1 pt-1 text-[11px]">
@@ -356,28 +418,92 @@ function TicketRow({ ticket, editing, saving, onEdit, onCancelEdit, onSave, onTo
           {!agency.email && !agency.phone && !agency.mobile_alt && <span className="text-neutral-600">No contact info</span>}
         </div>
         <div>
-          {ticket.due_date ? <p className={overdue ? "font-medium text-rose-300" : "text-neutral-300"}>{formatDate(ticket.due_date)}{overdue && <span className="mt-1 block text-[10px] uppercase tracking-wide">Overdue</span>}</p> : <span className="text-neutral-600">No date</span>}
+          {ticket.due_date ? <p className={overdue ? "ticket-overdue-date" : "text-neutral-300"}>{formatDate(ticket.due_date)}{overdue && <span className="ticket-overdue-label">Overdue</span>}</p> : <span className="text-neutral-600">No date</span>}
         </div>
-        <div className="flex justify-end gap-3 text-xs">
-          <button onClick={onEdit} className="h-fit text-neutral-400 hover:text-white">Edit</button>
-          <button onClick={onDelete} className="h-fit text-neutral-600 hover:text-rose-400">Delete</button>
+        <div className="flex justify-end text-xs">
+          <ActionMenu
+            label={`Actions for ${ticket.title}`}
+            iconOnly
+            items={[
+              { label: "Edit ticket", onClick: onEdit },
+              { separator: true },
+              { label: "Delete ticket", danger: true, onClick: onDelete },
+            ]}
+          />
         </div>
       </div>
       {editing && (
-        <div className="border-t border-neutral-800 bg-neutral-900 px-[59px] py-4">
-          <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_minmax(260px,1.2fr)_150px]">
+        <div className="border-t border-neutral-800 bg-neutral-900 px-[89px] py-4">
+          <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_minmax(220px,1.2fr)_140px_130px]">
             <FieldLabel label="Action"><input value={draft.title} onChange={(e) => setDraft((current) => ({ ...current, title: e.target.value }))} className="ticket-field" /></FieldLabel>
             <FieldLabel label="Details"><textarea value={draft.details} onChange={(e) => setDraft((current) => ({ ...current, details: e.target.value }))} rows={2} className="ticket-field resize-none" /></FieldLabel>
             <FieldLabel label="Due date"><input type="date" value={draft.dueDate} onChange={(e) => setDraft((current) => ({ ...current, dueDate: e.target.value }))} className="ticket-field" /></FieldLabel>
+            <FieldLabel label="Priority"><select value={draft.priority} onChange={(e) => setDraft((current) => ({ ...current, priority: e.target.value }))} className="ticket-field"><option value="low">Low</option><option value="medium">Medium</option><option value="urgent">Urgent</option></select></FieldLabel>
           </div>
           <div className="mt-3 flex items-end justify-between gap-4">
             <div><p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-neutral-500">Tags</p><TagPicker selected={draft.tags} onToggle={toggleDraftTag} /></div>
-            <div className="flex shrink-0 gap-2"><button onClick={onCancelEdit} className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300">Cancel</button><button disabled={saving || !draft.title.trim()} onClick={() => onSave({ title: draft.title.trim(), details: draft.details.trim() || null, tags: draft.tags, due_date: draft.dueDate || null })} className="rounded-lg bg-[#f01546] px-4 py-1.5 text-xs font-medium disabled:opacity-40">{saving ? "Saving..." : "Save"}</button></div>
+            <div className="flex shrink-0 gap-2"><button onClick={onCancelEdit} className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300">Cancel</button><button disabled={saving || !draft.title.trim()} onClick={() => onSave({ title: draft.title.trim(), details: draft.details.trim() || null, tags: draft.tags, due_date: draft.dueDate || null, priority: draft.priority })} className="rounded-lg bg-[#f01546] px-4 py-1.5 text-xs font-medium disabled:opacity-40">{saving ? "Saving..." : "Save"}</button></div>
           </div>
         </div>
       )}
     </div>
   );
+}
+
+function TicketMobileCard({ ticket, editing, saving, onEdit, onCancelEdit, onSave, onToggle, onDelete, onSetEmail }) {
+  const overdue = isTicketOverdue(ticket);
+  const agency = ticket.agency || {};
+  const [draft, setDraft] = useState({ title: ticket.title, details: ticket.details || "", dueDate: ticket.due_date || "", tags: ticket.tags || [], priority: ticket.priority || "medium" });
+
+  useEffect(() => {
+    if (editing) setDraft({ title: ticket.title, details: ticket.details || "", dueDate: ticket.due_date || "", tags: ticket.tags || [], priority: ticket.priority || "medium" });
+  }, [editing, ticket]);
+
+  function toggleTag(tag) {
+    setDraft((current) => ({ ...current, tags: current.tags.includes(tag) ? current.tags.filter((item) => item !== tag) : [...current.tags, tag] }));
+  }
+
+  return (
+    <article className={`ticket-mobile-card ${overdue ? "is-overdue" : ""}`}>
+      <div className="flex items-start gap-3">
+        <div className="pt-0.5"><PriorityFlag priority={ticket.priority} /></div>
+        <button onClick={onToggle} disabled={saving} aria-label={ticket.done ? "Restore ticket" : "Mark ticket complete"} className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition ${ticket.done ? "border-emerald-600 bg-emerald-600 text-white" : "border-neutral-600 text-transparent"}`}>✓</button>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <p className={`truncate text-sm font-semibold ${ticket.done ? "text-neutral-500" : "text-white"}`}>{ticket.agency_name || "Unknown agency"}</p>
+            {ticket.due_date && <div className={overdue ? "ticket-mobile-due is-overdue" : "ticket-mobile-due"}>{formatDate(ticket.due_date)}{overdue && <span>Overdue</span>}</div>}
+          </div>
+          <p className={`mt-1 text-sm font-medium leading-5 ${ticket.done ? "text-neutral-500 line-through" : "text-neutral-100"}`}>{ticket.title}</p>
+          {ticket.details && <p className="mt-1 text-xs leading-5 text-neutral-400">{ticket.details}</p>}
+          <div className="mt-2 flex flex-wrap gap-1.5">{(ticket.tags || []).map((tag) => <Tag key={tag}>{tag}</Tag>)}</div>
+          <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+            {agency.email ? <a href={`mailto:${agency.email}`} className="text-sky-300 hover:underline">✉ {agency.email}</a> : <button type="button" onClick={onSetEmail} className="font-medium text-[color:var(--brand)] hover:underline">No email — set one</button>}
+            {agency.phone && <a href={`tel:${agency.phone}`} className="text-neutral-300">☎ {agency.phone}</a>}
+          </div>
+          <div className="mt-3 flex justify-end">
+            <ActionMenu label={`Actions for ${ticket.title}`} iconOnly items={[{ label: "Edit ticket", onClick: onEdit }, { separator: true }, { label: "Delete ticket", danger: true, onClick: onDelete }]} />
+          </div>
+        </div>
+      </div>
+
+      {editing && (
+        <div className="ticket-mobile-editor mt-4 space-y-3">
+          <FieldLabel label="Action"><input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} className="ticket-field" /></FieldLabel>
+          <FieldLabel label="Details"><textarea value={draft.details} onChange={(event) => setDraft((current) => ({ ...current, details: event.target.value }))} rows={3} className="ticket-field resize-none" /></FieldLabel>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FieldLabel label="Due date"><input type="date" value={draft.dueDate} onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))} className="ticket-field" /></FieldLabel>
+            <FieldLabel label="Priority"><select value={draft.priority} onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value }))} className="ticket-field"><option value="low">Low</option><option value="medium">Medium</option><option value="urgent">Urgent</option></select></FieldLabel>
+          </div>
+          <div><p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-neutral-500">Requested actions</p><TagPicker selected={draft.tags} onToggle={toggleTag} /></div>
+          <div className="flex justify-end gap-2"><button onClick={onCancelEdit} className="activity-action activity-action--quiet">Cancel</button><button disabled={saving || !draft.title.trim()} onClick={() => onSave({ title: draft.title.trim(), details: draft.details.trim() || null, tags: draft.tags, due_date: draft.dueDate || null, priority: draft.priority })} className="primary-button disabled:opacity-40">{saving ? "Saving..." : "Save"}</button></div>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function PriorityFlag({ priority = "medium" }) {
+  return <span className={`ticket-priority-flag is-${priority}`} aria-label={`${priority} priority`} />;
 }
 
 function ExternalLink({ href, children }) {

@@ -5,8 +5,6 @@ import { useState } from "react";
 const FIELDS = [
   { key: "name", label: "Agency Name" },
   { key: "contact_person", label: "Contact Person (who you spoke to)" },
-  { key: "phone", label: "Phone" },
-  { key: "mobile_alt", label: "Mobile (Alt)" },
   { key: "email", label: "Email" },
   { key: "location", label: "Location" },
   { key: "active_listings", label: "Active Listings", type: "number" },
@@ -21,13 +19,14 @@ function toHref(value) {
   return /^https?:\/\//i.test(value) ? value : `https://${value}`;
 }
 
-export default function AgencyInfoModal({ agency, onClose, onSaved }) {
+export default function AgencyInfoModal({ agency, onClose, onSaved, onDelete, initialFocus }) {
   const [form, setForm] = useState(() => {
     const initial = {};
     FIELDS.forEach((f) => (initial[f.key] = agency[f.key] ?? ""));
     return initial;
   });
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   function setField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -51,16 +50,24 @@ export default function AgencyInfoModal({ agency, onClose, onSaved }) {
     }
   }
 
+  async function deleteAgency() {
+    if (!onDelete) return;
+    setDeleting(true);
+    const deleted = await onDelete();
+    setDeleting(false);
+    if (deleted) onClose();
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-xl shadow-2xl max-h-[85vh] overflow-y-auto"
+        className="modal-surface w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-neutral-900 border-b border-neutral-800 px-5 py-4 flex items-center justify-between">
+        <div className="modal-header sticky top-0 bg-neutral-900 border-b border-neutral-800 px-5 py-4 flex items-center justify-between">
           <h2 className="font-semibold text-white">Agency Info</h2>
           <button onClick={onClose} className="text-neutral-400 hover:text-white text-sm">
             Close
@@ -85,6 +92,7 @@ export default function AgencyInfoModal({ agency, onClose, onSaved }) {
                 )}
               </span>
               <input
+                autoFocus={f.key === initialFocus}
                 type={f.type || "text"}
                 value={form[f.key]}
                 onChange={(e) => setField(f.key, e.target.value)}
@@ -94,11 +102,21 @@ export default function AgencyInfoModal({ agency, onClose, onSaved }) {
           ))}
         </div>
 
-        <div className="sticky bottom-0 bg-neutral-900 border-t border-neutral-800 px-5 py-4">
+        <div className="modal-footer sticky bottom-0 flex items-center gap-3 bg-neutral-900 border-t border-neutral-800 px-5 py-4">
+          {onDelete && (
+            <button
+              type="button"
+              onClick={deleteAgency}
+              disabled={saving || deleting}
+              className="rounded border border-rose-900 px-3 py-2 text-sm font-medium text-rose-300 transition hover:border-rose-600 hover:bg-rose-950/50 disabled:opacity-50"
+            >
+              {deleting ? "Deleting..." : "Delete"}
+            </button>
+          )}
           <button
             onClick={save}
-            disabled={saving}
-            className="w-full bg-[#f01546] hover:bg-[#f2426a] disabled:opacity-50 text-white text-sm font-medium py-2 rounded transition"
+            disabled={saving || deleting}
+            className="flex-1 bg-[#f01546] hover:bg-[#f2426a] disabled:opacity-50 text-white text-sm font-medium py-2 rounded transition"
           >
             {saving ? "Saving..." : "Save"}
           </button>
