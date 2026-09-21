@@ -27,9 +27,8 @@ const SORT_FIELDS = {
   activeListings: "active_listings",
   status: "status_sort_order",
   phone: "phone",
-  package: "suggested_monthly_min",
-  pricePerListing: "suggested_price_per_listing_min",
-  monthly: "est_monthly_value",
+  package: "est_monthly_value",
+  pricePerListing: "price_per_listing",
   trialStart: "trial_start_date",
   trialEnd: "trial_end_date",
   nextFollowup: "next_followup_date",
@@ -225,7 +224,7 @@ export default function AgencyTable() {
     setShowSuggestedPricing(nextValue);
     document.cookie = `${SUGGESTED_PRICING_COOKIE}=${nextValue ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
 
-    if (!nextValue && [SORT_FIELDS.package, SORT_FIELDS.pricePerListing, SORT_FIELDS.monthly].includes(sortField)) {
+    if (!nextValue && [SORT_FIELDS.package, SORT_FIELDS.pricePerListing].includes(sortField)) {
       setSortField(null);
       setSortDir("asc");
       setVisibleCount(ROWS_PER_BATCH);
@@ -362,21 +361,14 @@ export default function AgencyTable() {
         {showSuggestedPricing && (
           <>
             <Computed>
-              {r.suggested_listing_min ? (
+              {r.price_per_listing != null ? (
                 <div className="leading-tight">
-                  <div>€{formatEuro(r.suggested_monthly_min)}–€{formatEuro(r.suggested_monthly_max)} / mo</div>
-                  <div className="text-xs text-neutral-500">{r.suggested_listing_min}–{r.suggested_listing_max} listings · 5–10% buffer</div>
+                  <div>€{formatEuro(r.est_monthly_value)} / mo</div>
+                  <div className="text-xs text-neutral-500">{r.active_listings.toLocaleString("sr-RS")} active listings</div>
                 </div>
               ) : "—"}
             </Computed>
-            <Computed>
-              {r.suggested_price_per_listing_min == null
-                ? "—"
-                : r.suggested_price_per_listing_min === r.suggested_price_per_listing_max
-                  ? `€${formatEuro(r.suggested_price_per_listing_min)}`
-                  : `€${formatEuro(r.suggested_price_per_listing_min)}–€${formatEuro(r.suggested_price_per_listing_max)}`}
-            </Computed>
-            <Computed>€{formatEuro(r.est_monthly_value)}</Computed>
+            <Computed>{r.price_per_listing == null ? "—" : `€${formatEuro(r.price_per_listing)}`}</Computed>
           </>
         )}
         <Td>
@@ -511,7 +503,7 @@ export default function AgencyTable() {
             </button>
           </div>
         ) : (
-          <div className={`agency-grid ${showSuggestedPricing ? "min-w-[1894px]" : "min-w-[1494px]"}`}>
+          <div className={`agency-grid ${showSuggestedPricing ? "min-w-[1764px]" : "min-w-[1494px]"}`}>
           <table className="agency-grid__table agency-grid__header">
             <AgencyColGroup showSuggestedPricing={showSuggestedPricing} />
             <thead>
@@ -536,7 +528,6 @@ export default function AgencyTable() {
                   <>
                     <SortTh label="Suggested listing price" field={SORT_FIELDS.package} {...{ sortField, sortDir, handleSort }} className="min-w-[160px]" />
                     <SortTh label="€/listing" field={SORT_FIELDS.pricePerListing} {...{ sortField, sortDir, handleSort }} className="min-w-[110px]" />
-                <SortTh label="Current listings €" field={SORT_FIELDS.monthly} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
                   </>
                 )}
                 <SortTh label="Trial start" field={SORT_FIELDS.trialStart} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
@@ -568,7 +559,7 @@ export default function AgencyTable() {
               {visibleRows.map(renderRow)}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={showSuggestedPricing ? 12 : 9} className="text-center text-neutral-600 text-sm py-10">
+                  <td colSpan={showSuggestedPricing ? 11 : 9} className="text-center text-neutral-600 text-sm py-10">
                     No agencies match.
                   </td>
                 </tr>
@@ -733,7 +724,7 @@ function AgencyColGroup({ showSuggestedPricing }) {
   return (
     <colgroup>
       {(showSuggestedPricing
-        ? [64, 190, 150, 130, 160, 110, 130, 130, 130, 140, 320, 240]
+        ? [64, 190, 150, 130, 160, 110, 130, 130, 140, 320, 240]
         : [64, 190, 150, 130, 130, 130, 140, 320, 240]
       ).map(
         (width, index) => <col key={index} style={{ width }} />
