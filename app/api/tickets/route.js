@@ -55,7 +55,8 @@ export async function POST(request) {
     ? body.tags.filter((tag) => typeof tag === "string" && tag.trim()).slice(0, 12)
     : [];
   const priority = normalizeTicketPriority(body.priority);
-  const storedTags = withTicketPriority(tags, priority);
+  const email = body.email?.trim() || null;
+  const storedTags = withTicketPriority(tags, priority, email);
   const details = body.details?.trim() || null;
   const baseInsert = {
     agency_id: body.agency_id,
@@ -81,7 +82,7 @@ export async function POST(request) {
       .from("tickets")
       .insert({
         ...baseInsert,
-        type: encodeLegacyTicketMeta({ tags, details, type: baseInsert.type, priority }),
+        type: encodeLegacyTicketMeta({ tags, details, type: baseInsert.type, priority, email }),
       })
       .select(AGENCY_SELECT)
       .single());

@@ -8,7 +8,7 @@ import AgencyInfoModal from "./AgencyInfoModal";
 
 const PRIORITY_ORDER = { urgent: 0, medium: 1, low: 2 };
 
-const EMPTY_FORM = { agencyId: "", title: "", details: "", dueDate: "", tags: [], priority: "medium" };
+const EMPTY_FORM = { agencyId: "", title: "", details: "", dueDate: "", tags: [], priority: "medium", email: "" };
 
 export default function TicketsBoard({ agencies, onChanged, onAgencyChanged }) {
   const [tickets, setTickets] = useState([]);
@@ -46,6 +46,10 @@ export default function TicketsBoard({ agencies, onChanged, onAgencyChanged }) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function selectAgencyForTicket(agencyId) {
+    setForm((current) => ({ ...current, agencyId, email: "" }));
+  }
+
   function toggleTag(tag) {
     setForm((current) => ({
       ...current,
@@ -77,6 +81,7 @@ export default function TicketsBoard({ agencies, onChanged, onAgencyChanged }) {
         tags: form.tags,
         due_date: form.dueDate || null,
         priority: form.priority,
+        email: form.email.trim() || null,
       }),
     });
     const json = await res.json().catch(() => ({}));
@@ -139,6 +144,7 @@ export default function TicketsBoard({ agencies, onChanged, onAgencyChanged }) {
       return [
         ticket.title,
         ticket.details,
+        ticket.email,
         ticket.agency_name,
         agency.contact_person,
         agency.email,
@@ -178,7 +184,7 @@ export default function TicketsBoard({ agencies, onChanged, onAgencyChanged }) {
                 <div className="space-y-4 px-5 py-4">
                   <div className="grid gap-3 lg:grid-cols-[minmax(280px,1fr)_150px_150px]">
                     <FieldLabel label="Agency">
-                      <AgencyPicker agencies={agencies} value={form.agencyId} onChange={(agencyId) => setField("agencyId", agencyId)} />
+                      <AgencyPicker agencies={agencies} value={form.agencyId} onChange={selectAgencyForTicket} />
                     </FieldLabel>
                     <FieldLabel label="Due date">
                       <input type="date" value={form.dueDate} onChange={(e) => setField("dueDate", e.target.value)} className="ticket-field" />
@@ -191,6 +197,9 @@ export default function TicketsBoard({ agencies, onChanged, onAgencyChanged }) {
                       </select>
                     </FieldLabel>
                   </div>
+                  <FieldLabel label="Ticket email (optional)">
+                    <input type="email" value={form.email} onChange={(e) => setField("email", e.target.value)} placeholder={agencies.find((agency) => agency.id === form.agencyId)?.email ? `Default: ${agencies.find((agency) => agency.id === form.agencyId).email}` : "Email given specifically for this ticket"} className="ticket-field" />
+                  </FieldLabel>
                   <div className="grid gap-3 lg:grid-cols-[minmax(280px,1.4fr)_minmax(340px,1fr)]">
                     <FieldLabel label="Details / what should be said">
                       <textarea value={form.details} onChange={(e) => setField("details", e.target.value)} placeholder="Short brief, exact message or any context your friend needs..." rows={3} className="ticket-field resize-none" />
@@ -377,10 +386,10 @@ function AgencyPicker({ agencies, value, onChange }) {
 function TicketRow({ ticket, editing, saving, onEdit, onCancelEdit, onSave, onToggle, onDelete, onSetEmail }) {
   const overdue = isTicketOverdue(ticket);
   const agency = ticket.agency || {};
-  const [draft, setDraft] = useState({ title: ticket.title, details: ticket.details || "", dueDate: ticket.due_date || "", tags: ticket.tags || [], priority: ticket.priority || "medium" });
+  const [draft, setDraft] = useState({ title: ticket.title, details: ticket.details || "", dueDate: ticket.due_date || "", tags: ticket.tags || [], priority: ticket.priority || "medium", email: ticket.email || "" });
 
   useEffect(() => {
-    if (editing) setDraft({ title: ticket.title, details: ticket.details || "", dueDate: ticket.due_date || "", tags: ticket.tags || [], priority: ticket.priority || "medium" });
+    if (editing) setDraft({ title: ticket.title, details: ticket.details || "", dueDate: ticket.due_date || "", tags: ticket.tags || [], priority: ticket.priority || "medium", email: ticket.email || ticket.agency?.email || "" });
   }, [editing, ticket]);
 
   function toggleDraftTag(tag) {
@@ -407,15 +416,16 @@ function TicketRow({ ticket, editing, saving, onEdit, onCancelEdit, onSave, onTo
           <div className="mt-2 flex flex-wrap gap-1.5">{(ticket.tags || []).map((tag) => <Tag key={tag}>{tag}</Tag>)}</div>
         </div>
         <div className="min-w-0 space-y-1 text-xs">
-          {agency.email && <a href={`mailto:${agency.email}`} className="block truncate text-sky-300 hover:underline" title={agency.email}>✉ {agency.email}</a>}
-          {!agency.email && <button type="button" onClick={onSetEmail} className="block text-left font-medium text-[color:var(--brand)] hover:underline">No email — set one</button>}
+          {agency.email && <a href={`mailto:${agency.email}`} className="block truncate text-neutral-400 hover:text-sky-300 hover:underline" title="Default agency email">Default: {agency.email}</a>}
+          {ticket.email && <a href={`mailto:${ticket.email}`} className="block truncate text-sky-300 hover:underline" title="Ticket email">Ticket: {ticket.email}</a>}
+          {!agency.email && !ticket.email && <button type="button" onClick={onSetEmail} className="block text-left font-medium text-[color:var(--brand)] hover:underline">No email — set one</button>}
           {agency.phone && <a href={`tel:${agency.phone}`} className="block truncate text-neutral-300 hover:text-white">☎ {agency.phone}</a>}
           {agency.mobile_alt && <a href={`tel:${agency.mobile_alt}`} className="block truncate text-neutral-400 hover:text-white">Mobile: {agency.mobile_alt}</a>}
           <div className="flex flex-wrap gap-x-2 gap-y-1 pt-1 text-[11px]">
             {agency.website && <ExternalLink href={agency.website}>Website</ExternalLink>}
             {agency.oglasnik_profil && <ExternalLink href={agency.oglasnik_profil}>Oglasnik</ExternalLink>}
           </div>
-          {!agency.email && !agency.phone && !agency.mobile_alt && <span className="text-neutral-600">No contact info</span>}
+          {!agency.email && !ticket.email && !agency.phone && !agency.mobile_alt && <span className="text-neutral-600">No contact info</span>}
         </div>
         <div>
           {ticket.due_date ? <p className={overdue ? "ticket-overdue-date" : "text-neutral-300"}>{formatDate(ticket.due_date)}{overdue && <span className="ticket-overdue-label">Overdue</span>}</p> : <span className="text-neutral-600">No date</span>}
@@ -434,15 +444,16 @@ function TicketRow({ ticket, editing, saving, onEdit, onCancelEdit, onSave, onTo
       </div>
       {editing && (
         <div className="border-t border-neutral-800 bg-neutral-900 px-[89px] py-4">
-          <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_minmax(220px,1.2fr)_140px_130px]">
+          <div className="grid gap-3 lg:grid-cols-[minmax(180px,1fr)_minmax(200px,1.2fr)_140px_130px_minmax(190px,.9fr)]">
             <FieldLabel label="Action"><input value={draft.title} onChange={(e) => setDraft((current) => ({ ...current, title: e.target.value }))} className="ticket-field" /></FieldLabel>
             <FieldLabel label="Details"><textarea value={draft.details} onChange={(e) => setDraft((current) => ({ ...current, details: e.target.value }))} rows={2} className="ticket-field resize-none" /></FieldLabel>
             <FieldLabel label="Due date"><input type="date" value={draft.dueDate} onChange={(e) => setDraft((current) => ({ ...current, dueDate: e.target.value }))} className="ticket-field" /></FieldLabel>
             <FieldLabel label="Priority"><select value={draft.priority} onChange={(e) => setDraft((current) => ({ ...current, priority: e.target.value }))} className="ticket-field"><option value="low">Low</option><option value="medium">Medium</option><option value="urgent">Urgent</option></select></FieldLabel>
+            <FieldLabel label="Ticket email (optional)"><input type="email" value={draft.email} onChange={(e) => setDraft((current) => ({ ...current, email: e.target.value }))} placeholder={agency.email ? `Default: ${agency.email}` : "Email for this ticket"} className="ticket-field" /></FieldLabel>
           </div>
           <div className="mt-3 flex items-end justify-between gap-4">
             <div><p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-neutral-500">Tags</p><TagPicker selected={draft.tags} onToggle={toggleDraftTag} /></div>
-            <div className="flex shrink-0 gap-2"><button onClick={onCancelEdit} className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300">Cancel</button><button disabled={saving || !draft.title.trim()} onClick={() => onSave({ title: draft.title.trim(), details: draft.details.trim() || null, tags: draft.tags, due_date: draft.dueDate || null, priority: draft.priority })} className="rounded-lg bg-[#f01546] px-4 py-1.5 text-xs font-medium disabled:opacity-40">{saving ? "Saving..." : "Save"}</button></div>
+            <div className="flex shrink-0 gap-2"><button onClick={onCancelEdit} className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300">Cancel</button><button disabled={saving || !draft.title.trim()} onClick={() => onSave({ title: draft.title.trim(), details: draft.details.trim() || null, tags: draft.tags, due_date: draft.dueDate || null, priority: draft.priority, email: draft.email.trim() || null })} className="rounded-lg bg-[#f01546] px-4 py-1.5 text-xs font-medium disabled:opacity-40">{saving ? "Saving..." : "Save"}</button></div>
           </div>
         </div>
       )}
@@ -453,10 +464,10 @@ function TicketRow({ ticket, editing, saving, onEdit, onCancelEdit, onSave, onTo
 function TicketMobileCard({ ticket, editing, saving, onEdit, onCancelEdit, onSave, onToggle, onDelete, onSetEmail }) {
   const overdue = isTicketOverdue(ticket);
   const agency = ticket.agency || {};
-  const [draft, setDraft] = useState({ title: ticket.title, details: ticket.details || "", dueDate: ticket.due_date || "", tags: ticket.tags || [], priority: ticket.priority || "medium" });
+  const [draft, setDraft] = useState({ title: ticket.title, details: ticket.details || "", dueDate: ticket.due_date || "", tags: ticket.tags || [], priority: ticket.priority || "medium", email: ticket.email || "" });
 
   useEffect(() => {
-    if (editing) setDraft({ title: ticket.title, details: ticket.details || "", dueDate: ticket.due_date || "", tags: ticket.tags || [], priority: ticket.priority || "medium" });
+    if (editing) setDraft({ title: ticket.title, details: ticket.details || "", dueDate: ticket.due_date || "", tags: ticket.tags || [], priority: ticket.priority || "medium", email: ticket.email || ticket.agency?.email || "" });
   }, [editing, ticket]);
 
   function toggleTag(tag) {
@@ -477,7 +488,9 @@ function TicketMobileCard({ ticket, editing, saving, onEdit, onCancelEdit, onSav
           {ticket.details && <p className="mt-1 text-xs leading-5 text-neutral-400">{ticket.details}</p>}
           <div className="mt-2 flex flex-wrap gap-1.5">{(ticket.tags || []).map((tag) => <Tag key={tag}>{tag}</Tag>)}</div>
           <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-            {agency.email ? <a href={`mailto:${agency.email}`} className="text-sky-300 hover:underline">✉ {agency.email}</a> : <button type="button" onClick={onSetEmail} className="font-medium text-[color:var(--brand)] hover:underline">No email — set one</button>}
+            {agency.email && <a href={`mailto:${agency.email}`} className="text-neutral-400 hover:text-sky-300 hover:underline">Default: {agency.email}</a>}
+            {ticket.email && <a href={`mailto:${ticket.email}`} className="text-sky-300 hover:underline">Ticket: {ticket.email}</a>}
+            {!agency.email && !ticket.email && <button type="button" onClick={onSetEmail} className="font-medium text-[color:var(--brand)] hover:underline">No email — set one</button>}
             {agency.phone && <a href={`tel:${agency.phone}`} className="text-neutral-300">☎ {agency.phone}</a>}
           </div>
           <div className="mt-3 flex justify-end">
@@ -494,8 +507,9 @@ function TicketMobileCard({ ticket, editing, saving, onEdit, onCancelEdit, onSav
             <FieldLabel label="Due date"><input type="date" value={draft.dueDate} onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))} className="ticket-field" /></FieldLabel>
             <FieldLabel label="Priority"><select value={draft.priority} onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value }))} className="ticket-field"><option value="low">Low</option><option value="medium">Medium</option><option value="urgent">Urgent</option></select></FieldLabel>
           </div>
+          <FieldLabel label="Ticket email (optional)"><input type="email" value={draft.email} onChange={(event) => setDraft((current) => ({ ...current, email: event.target.value }))} placeholder={agency.email ? `Default: ${agency.email}` : "Email for this ticket"} className="ticket-field" /></FieldLabel>
           <div><p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-neutral-500">Requested actions</p><TagPicker selected={draft.tags} onToggle={toggleTag} /></div>
-          <div className="flex justify-end gap-2"><button onClick={onCancelEdit} className="activity-action activity-action--quiet">Cancel</button><button disabled={saving || !draft.title.trim()} onClick={() => onSave({ title: draft.title.trim(), details: draft.details.trim() || null, tags: draft.tags, due_date: draft.dueDate || null, priority: draft.priority })} className="primary-button disabled:opacity-40">{saving ? "Saving..." : "Save"}</button></div>
+          <div className="flex justify-end gap-2"><button onClick={onCancelEdit} className="activity-action activity-action--quiet">Cancel</button><button disabled={saving || !draft.title.trim()} onClick={() => onSave({ title: draft.title.trim(), details: draft.details.trim() || null, tags: draft.tags, due_date: draft.dueDate || null, priority: draft.priority, email: draft.email.trim() || null })} className="primary-button disabled:opacity-40">{saving ? "Saving..." : "Save"}</button></div>
         </div>
       )}
     </article>

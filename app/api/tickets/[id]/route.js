@@ -26,7 +26,7 @@ export async function PATCH(request, { params }) {
   }
 
   if (Array.isArray(body.tags)) {
-    update.tags = withTicketPriority(body.tags, normalizeTicketPriority(body.priority));
+    update.tags = withTicketPriority(body.tags, normalizeTicketPriority(body.priority), body.email);
   }
 
   if (Object.keys(update).length === 0) {
@@ -65,6 +65,7 @@ export async function PATCH(request, { params }) {
       details: update.details ?? legacy?.details ?? null,
       type: update.type ?? legacy?.type ?? (legacy ? null : current.type),
       priority: normalizeTicketPriority(body.priority ?? legacy?.priority),
+      email: body.email ?? legacy?.email,
     });
 
     ({ data, error } = await supabase

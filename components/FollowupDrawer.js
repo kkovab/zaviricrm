@@ -47,6 +47,7 @@ export default function FollowupDrawer({ agency, statuses, initialMode = "log", 
   const [ticketPriority, setTicketPriority] = useState("medium");
   const [ticketDueDate, setTicketDueDate] = useState("");
   const [ticketDetails, setTicketDetails] = useState("");
+  const [ticketEmail, setTicketEmail] = useState("");
   const [selectedScheduled, setSelectedScheduled] = useState(null);
   const [completingScheduled, setCompletingScheduled] = useState(null);
   const [history, setHistory] = useState([]);
@@ -133,6 +134,7 @@ export default function FollowupDrawer({ agency, statuses, initialMode = "log", 
           details: ticketDetails || (isContact ? description : scheduleReason) || null,
           tags: ticketTags,
           priority: ticketPriority,
+          email: ticketEmail.trim() || null,
         }),
       });
       const ticketJson = await ticketRes.json();
@@ -143,6 +145,7 @@ export default function FollowupDrawer({ agency, statuses, initialMode = "log", 
         setTicketPriority("medium");
         setTicketDueDate("");
         setTicketDetails("");
+        setTicketEmail("");
       }
     }
 
@@ -190,6 +193,7 @@ export default function FollowupDrawer({ agency, statuses, initialMode = "log", 
           details: contact.ticketDetails || contact.description || null,
           tags: contact.ticketTags,
           priority: contact.ticketPriority,
+          email: contact.ticketEmail?.trim() || null,
         }),
       });
       const ticketJson = await ticketRes.json();
@@ -289,6 +293,9 @@ export default function FollowupDrawer({ agency, statuses, initialMode = "log", 
                   </label>
                 </div>
                 <div><p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-neutral-500">Requested actions</p><TicketActionPicker selected={ticketTags} onChange={setTicketTags} /></div>
+                <label className="block text-xs text-neutral-400">Ticket email <span className="text-neutral-600">(optional)</span>
+                  <input type="email" value={ticketEmail} onChange={(event) => setTicketEmail(event.target.value)} placeholder={agency.email ? `Default: ${agency.email}` : "name@example.com"} className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#f01546]" />
+                </label>
                 <label className="block text-xs text-neutral-400">Details <span className="text-neutral-600">(optional)</span>
                   <input value={ticketDetails} onChange={(event) => setTicketDetails(event.target.value)} placeholder="Extra context" className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#f01546]" />
                 </label>
@@ -480,6 +487,7 @@ function CompleteFollowupModal({ item, agency, statuses, onClose, onComplete }) 
   const [ticketPriority, setTicketPriority] = useState("medium");
   const [ticketDueDate, setTicketDueDate] = useState("");
   const [ticketDetails, setTicketDetails] = useState("");
+  const [ticketEmail, setTicketEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -488,7 +496,7 @@ function CompleteFollowupModal({ item, agency, statuses, onClose, onComplete }) 
     if (!date) return;
     setSaving(true);
     setError("");
-    const result = await onComplete({ date, method, statusId, description, createTicket, ticketTags, ticketPriority, ticketDueDate, ticketDetails });
+    const result = await onComplete({ date, method, statusId, description, createTicket, ticketTags, ticketPriority, ticketDueDate, ticketDetails, ticketEmail });
     setSaving(false);
     if (result) setError(result);
   }
@@ -549,6 +557,9 @@ function CompleteFollowupModal({ item, agency, statuses, onClose, onComplete }) 
                   </label>
                 </div>
                 <div><p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-neutral-500">Requested actions</p><TicketActionPicker selected={ticketTags} onChange={setTicketTags} /></div>
+                <label className="block text-xs text-neutral-400">Ticket email <span className="text-neutral-600">(optional)</span>
+                  <input type="email" value={ticketEmail} onChange={(event) => setTicketEmail(event.target.value)} placeholder={agency.email ? `Default: ${agency.email}` : "name@example.com"} className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#f01546]" />
+                </label>
                 <label className="block text-xs text-neutral-400">Details <span className="text-neutral-600">(optional)</span>
                   <input value={ticketDetails} onChange={(event) => setTicketDetails(event.target.value)} placeholder="Extra context" className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#f01546]" />
                 </label>
