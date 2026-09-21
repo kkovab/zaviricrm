@@ -26,10 +26,9 @@ import {
 const SORT_FIELDS = {
   activeListings: "active_listings",
   status: "status_sort_order",
-  accountCreated: "created_at",
   phone: "phone",
-  package: "package_capacity",
-  pricePerListing: "price_per_listing",
+  package: "suggested_monthly_min",
+  pricePerListing: "suggested_price_per_listing_min",
   monthly: "est_monthly_value",
   trialStart: "trial_start_date",
   trialEnd: "trial_end_date",
@@ -357,21 +356,26 @@ export default function AgencyTable() {
             onSave={(v) => patch(r.id, "status_id", v)}
           />
         </Td>
-        <Computed>{formatDate(r.created_at) || "—"}</Computed>
         <Td>
           <PhoneCell agency={r} onClick={() => setPhonesAgency(r)} />
         </Td>
         {showSuggestedPricing && (
           <>
             <Computed>
-              {r.package_capacity ? (
+              {r.suggested_listing_min ? (
                 <div className="leading-tight">
-                  <div>€{formatEuro(r.package_monthly_price)} / mo</div>
-                  <div className="text-xs text-neutral-500">up to {r.package_capacity.toLocaleString("sr-RS")} listings</div>
+                  <div>€{formatEuro(r.suggested_monthly_min)}–€{formatEuro(r.suggested_monthly_max)} / mo</div>
+                  <div className="text-xs text-neutral-500">{r.suggested_listing_min}–{r.suggested_listing_max} listings · 5–10% buffer</div>
                 </div>
               ) : "—"}
             </Computed>
-            <Computed>{r.price_per_listing == null ? "—" : `€${formatEuro(r.price_per_listing)}`}</Computed>
+            <Computed>
+              {r.suggested_price_per_listing_min == null
+                ? "—"
+                : r.suggested_price_per_listing_min === r.suggested_price_per_listing_max
+                  ? `€${formatEuro(r.suggested_price_per_listing_min)}`
+                  : `€${formatEuro(r.suggested_price_per_listing_min)}–€${formatEuro(r.suggested_price_per_listing_max)}`}
+            </Computed>
             <Computed>€{formatEuro(r.est_monthly_value)}</Computed>
           </>
         )}
@@ -507,7 +511,7 @@ export default function AgencyTable() {
             </button>
           </div>
         ) : (
-          <div className={`agency-grid ${showSuggestedPricing ? "min-w-[2014px]" : "min-w-[1614px]"}`}>
+          <div className={`agency-grid ${showSuggestedPricing ? "min-w-[1894px]" : "min-w-[1494px]"}`}>
           <table className="agency-grid__table agency-grid__header">
             <AgencyColGroup showSuggestedPricing={showSuggestedPricing} />
             <thead>
@@ -527,13 +531,12 @@ export default function AgencyTable() {
                   Agency{sortIndicator("name", sortField, sortDir)}
                 </th>
                 <SortTh label="Status" field={SORT_FIELDS.status} {...{ sortField, sortDir, handleSort }} className="min-w-[150px]" />
-                <SortTh label="Account created" field={SORT_FIELDS.accountCreated} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
                 <SortTh label="Phone" field={SORT_FIELDS.phone} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
                 {showSuggestedPricing && (
                   <>
                     <SortTh label="Suggested listing price" field={SORT_FIELDS.package} {...{ sortField, sortDir, handleSort }} className="min-w-[160px]" />
                     <SortTh label="€/listing" field={SORT_FIELDS.pricePerListing} {...{ sortField, sortDir, handleSort }} className="min-w-[110px]" />
-                    <SortTh label="Est. monthly €" field={SORT_FIELDS.monthly} {...{ sortField, sortDir, handleSort }} className="min-w-[120px]" />
+                <SortTh label="Current listings €" field={SORT_FIELDS.monthly} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
                   </>
                 )}
                 <SortTh label="Trial start" field={SORT_FIELDS.trialStart} {...{ sortField, sortDir, handleSort }} className="min-w-[130px]" />
@@ -565,7 +568,7 @@ export default function AgencyTable() {
               {visibleRows.map(renderRow)}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={showSuggestedPricing ? 13 : 10} className="text-center text-neutral-600 text-sm py-10">
+                  <td colSpan={showSuggestedPricing ? 12 : 9} className="text-center text-neutral-600 text-sm py-10">
                     No agencies match.
                   </td>
                 </tr>
@@ -730,8 +733,8 @@ function AgencyColGroup({ showSuggestedPricing }) {
   return (
     <colgroup>
       {(showSuggestedPricing
-        ? [64, 190, 150, 130, 130, 160, 110, 120, 130, 130, 140, 320, 240]
-        : [64, 190, 150, 130, 130, 130, 130, 140, 320, 240]
+        ? [64, 190, 150, 130, 160, 110, 130, 130, 130, 140, 320, 240]
+        : [64, 190, 150, 130, 130, 130, 140, 320, 240]
       ).map(
         (width, index) => <col key={index} style={{ width }} />
       )}
