@@ -12,7 +12,7 @@ import WorkspaceHeader from "./WorkspaceHeader";
 import { supabaseClient } from "@/lib/supabaseClient";
 import {
   isFollowupOverdue,
-  isFollowupWithinNextDays,
+  hasScheduledFollowup,
   compareByPriority,
   formatDate,
   formatEuro,
@@ -114,6 +114,14 @@ export default function AgencyTable() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "agency_notes" },
+        () => {
+          clearTimeout(reloadTimer);
+          reloadTimer = setTimeout(() => load({ silent: true }), 400);
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "scheduled_followups" },
         () => {
           clearTimeout(reloadTimer);
           reloadTimer = setTimeout(() => load({ silent: true }), 400);
@@ -281,12 +289,12 @@ export default function AgencyTable() {
     });
   }, [matchingRows, sortField, sortDir]);
 
-  // Overdue agencies and agencies scheduled within the next 30 days are
-  // pulled into their own "Follow Up" section at the top of the table. By
-  // section is always ordered by soonest next follow-up date first. It is
-  // intentionally independent from the sort selected for the regular table.
+  // Every explicitly scheduled follow-up belongs in the dedicated queue,
+  // regardless of its date, pipeline status, search, or status filter. The
+  // section is always ordered by soonest next follow-up date first and is
+  // intentionally independent from the regular table controls.
   const followUpRows = useMemo(() => {
-    const upcomingRows = matchingRows.filter(isFollowupWithinNextDays);
+    const upcomingRows = rows.filter(hasScheduledFollowup);
     return [...upcomingRows].sort((a, b) => {
       const dueA = a.next_followup_date;
       const dueB = b.next_followup_date;
@@ -295,8 +303,8 @@ export default function AgencyTable() {
       if (!dueA && dueB) return 1;
       return 0;
     });
-  }, [matchingRows]);
-  const otherRows = useMemo(() => filtered.filter((r) => !isFollowupWithinNextDays(r)), [filtered]);
+  }, [rows]);
+  const otherRows = useMemo(() => filtered.filter((r) => !hasScheduledFollowup(r)), [filtered]);
   // Keep the priority queue fully visible, while rendering the rest in
   // small batches. This avoids hundreds of editable DOM cells updating on
   // every sort, filter, or realtime refresh.
