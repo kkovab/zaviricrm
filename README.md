@@ -40,18 +40,32 @@ below in order. It'll take about 15–20 minutes the first time.
 1. Go to [vercel.com](https://vercel.com) and sign up / log in (you can use
    your GitHub account to sign in, which makes step 2 below easier).
 2. Click **Add New → Project**, and import the GitHub repo you just created.
-3. Before clicking Deploy, open **Environment Variables** and add these three:
+3. Before clicking Deploy, open **Environment Variables** and add these four:
 
    | Name | Value |
    |---|---|
    | `SUPABASE_URL` | the Project URL from step 1 |
    | `SUPABASE_SERVICE_ROLE_KEY` | the service_role key from step 1 |
    | `APP_PASSWORD` | a password you make up — this is what you and your friend type to get into the site |
+   | `MCP_SHARED_SECRET` | a separate long random secret used only by MCP clients |
 
 4. Click **Deploy**. Wait ~1 minute. Vercel gives you a live URL
    (like `zaviri-crm.vercel.app`) — that's your site.
 
 That's it. Visit the URL, enter the password you set, and you're in.
+
+## MCP access
+
+Point an MCP client at `https://YOUR-DOMAIN/api/mcp` and send the shared
+secret as `Authorization: Bearer YOUR_MCP_SHARED_SECRET`. The endpoint is a
+stateless JSON-RPC HTTP server and does not require an MCP SDK or an SSE
+connection.
+
+Its tools cover agency search/details and safe field updates, phone-number
+lists, statuses and calculated pricing, timestamped notes, completed contact
+history, scheduled follow-ups, and tickets (including priority, tags, ticket
+email, deadlines, completion and restore). It deliberately does not expose
+agency deletion or status-definition changes.
 
 ---
 
